@@ -9,9 +9,11 @@ import android.content.res.Configuration;
 import android.hardware.Camera;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
+import android.media.CamcorderProfile;
 import android.media.ExifInterface;
 import android.media.MediaRecorder;
 import android.net.Uri;
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
@@ -35,6 +37,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Callback{
     private SurfaceHolder mHolder;
@@ -56,9 +59,13 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     private String mCameraVideoFilename;
     private Uri videoUri = null;
     private long mRecordingStartTime = 0;
-    private long mMaxVideoDurationInMs = 600;
-
-
+    private long mMaxVideoDurationInMs = 60000;
+    public int count_r = 0;
+    private CountDownTimer recordTimer;
+    private String title;
+    private  String filename;
+    private long recordTime = 0;
+    public   List<Camera.Size> previewSizeList;
 
     // 필수 생성자
     public CameraSurfaceView(Context context) {
@@ -98,6 +105,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         Camera.getCameraInfo(mCameraID, cameraInfo);
 
         mCameraInfo = cameraInfo;
+
+        previewSizeList = parameters.getSupportedPreviewSizes();
 
         MainActivity.record_btn.setOnClickListener(captrureListener);
     }
@@ -205,23 +214,37 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 mediaRecorder.stop();
                 mediaRecorder.release();
                 mCamera.lock();
+                recordTimerDestroy();
+                setRecorderValue();
                 recording = false;
             } else {
                 try {
                     mediaRecorder = new MediaRecorder();
                     mCamera.unlock();
                     mediaRecorder.setCamera(mCamera);
+
                     mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
                     mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-                    mediaRecorder.setAudioEncoder(3);
-                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
+
+                    CamcorderProfile profile =  CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
+                    profile.videoFrameWidth = previewSizeList.get(0).width;
+                    profile.videoFrameHeight = previewSizeList.get(0).height;
+
+                    mediaRecorder.setProfile(profile);
                     mediaRecorder.setOrientationHint(90);
-                    mediaRecorder.setVideoSize(1440,2880);
-                    mediaRecorder.setVideoFrameRate(15);
-                    createVideoPath();
-                    String fileName = String.format("%d.mp4", System.currentTimeMillis());
-                    mediaRecorder.setOutputFile(mCameraVideoFilename);
+
+//                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+//                    mediaRecorder.setVideoSize(previewSizeList.get(0).width ,previewSizeList.get(0).height );
+//                    mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
+//                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+//                    mediaRecorder.setAudioEncoder(3);
+
+                    String cameraDirPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/TEST_CAMERA";
+                    File cameraDir = new File(cameraDirPath);
+                    cameraDir.mkdirs();
+                    title = String.format("%d.mp4", System.currentTimeMillis());
+                    filename = cameraDirPath + "/" + title;
+                    mediaRecorder.setOutputFile(filename);
                     mediaRecorder.setPreviewDisplay(mHolder.getSurface());
                     mediaRecorder.prepare();
                     mediaRecorder.start();
@@ -229,10 +252,13 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                     mRecordingStartTime = SystemClock.uptimeMillis();
                     updateRecordingTime();
                     Toast.makeText(MainActivity.mContext, "start", Toast.LENGTH_SHORT).show();
+                    recordTimer();
+                    recordTimer.start();
                 } catch (final Exception ex) {
                     ex.printStackTrace();
                     MainActivity.recordTimeText.setText("");
                     mediaRecorder.release();
+                    recordTimerDestroy();;
                     return;
 
                     // Log.i("---","Exception in thread");
@@ -241,17 +267,10 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         }
     };
 
-    private void createVideoPath() {
+    private void setRecorderValue() {
         long dateTaken = System.currentTimeMillis();
-        String title = String.format("%d.mp4", System.currentTimeMillis());
         String displayName = title + ".mp4"; // Used when emailing.
-        String cameraDirPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/TEST_CAMERA";
-        File cameraDir = new File(cameraDirPath);
-        cameraDir.mkdirs();
-        SimpleDateFormat dateFormat = new SimpleDateFormat("'video'HHmmss");
-        Date date = new Date(dateTaken);
-        String filepart = dateFormat.format(date);
-        String filename = cameraDirPath + "/" + filepart + ".mp4";
+        mCameraVideoFilename = filename;
         ContentValues values = new ContentValues(7);
         //values put을 해야 갤러리에서 확인 가능
         values.put(MediaStore.Video.Media.TITLE, title);
@@ -260,33 +279,24 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
         values.put(MediaStore.Video.Media.DATA, filename);
         values.put(MediaStore.Video.Media.DATE_MODIFIED, (int) (dateTaken / 1000));
+        values.put(MediaStore.Video.Media.DURATION, recordTime);
+
         ContentResolver contentResolver = MainActivity.mContext.getContentResolver();
-         mCameraVideoFilename = filename;
+
         videoUri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
         MainActivity.mContext.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, videoUri));
 
     }
 
-    private void updateRecordingTime() {
+
+    public void updateRecordingTime() {
         if (!recording) {
             return;
         }
         long now = SystemClock.uptimeMillis();
         long delta = now - mRecordingStartTime;
-
-        // Starting a minute before reaching the max duration
-        // limit, we'll countdown the remaining time instead.
-        boolean countdownRemainingTime = (mMaxVideoDurationInMs != 0 && delta >= mMaxVideoDurationInMs - 60000);
-
-        long next_update_delay = 1000 - (delta % 1000);
-        long seconds;
-        if (countdownRemainingTime) {
-            delta = Math.max(0, mMaxVideoDurationInMs - delta);
-            seconds = (delta + 999) / 1000;
-        } else {
-            seconds = delta / 1000; // round to nearest
-        }
-
+        recordTime = delta;
+        long seconds = delta / 1000;
         long minutes = seconds / 60;
         long hours = minutes / 60;
         long remainderMinutes = minutes - (hours * 60);
@@ -309,23 +319,32 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
             text = hoursString + ":" + text;
         }
 
-
+        Log.d(TAG, "time : " + text);
         MainActivity.recordTimeText.setText(text);
 
-//        if (mRecordingTimeCountsDown != countdownRemainingTime) {
-//            // Avoid setting the color on every update, do it only
-//            // when it needs changing.
-//            mRecordingTimeCountsDown = countdownRemainingTime;
-
-//            int color = getResources()
-//                    .getColor(
-//                            countdownRemainingTime ? R.color.recording_time_remaining_text
-//                                    : R.color.recording_time_elapsed_text);
-//
-//            MainActivity.recordTimeText.setTextColor(color);
-//        }
-
         surfaceView.invalidate();
+    }
+
+    public void recordTimer(){
+
+        recordTimer = new CountDownTimer(60000, 1000) {
+            public void onTick(long millisUntilFinished) {
+                 updateRecordingTime();
+//                recordTimeText.setText(String.valueOf(count));
+//                count_r = count_r + 1;
+            }
+            public void onFinish() {
+                MainActivity.recordTimeText.setText("");
+                recordTimerDestroy();
+            }
+        };
+    }
+
+    public void recordTimerDestroy() {
+        try{
+            recordTimer.cancel();
+        } catch (Exception e) {}
+        recordTimer=null;
     }
 
 

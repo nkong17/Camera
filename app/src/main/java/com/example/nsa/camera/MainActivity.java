@@ -69,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
     public static int timerSec = 0;
     public int count = 0;
 
+
     private static final int COUNT_DOWN_INTERVAL = 1000;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -204,17 +205,19 @@ public class MainActivity extends AppCompatActivity {
             public void onFinish() {
                 countTxt.setText("");
                 capture();
-                timerDestroy();
+                countTimerDestroy();
             }
         };
     }
 
-    public void timerDestroy() {
+
+    public void countTimerDestroy() {
         try{
             countDownTimer.cancel();
         } catch (Exception e) {}
-        countDownTimer=null;
+        countDownTimer = null;
     }
+
 
     public int getCameraRotation( int rotation) {
         int degrees = 0;

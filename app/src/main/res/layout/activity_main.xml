@@ -61,7 +61,7 @@
             android:text=""
             android:textColor="#FCFCFC"
             app:scale_height="10"
-            app:scale_textsize="7"
+            app:scale_textsize="5"
             app:scale_width="50"
             app:scale_top="140"
             app:scale_left="25"/>
