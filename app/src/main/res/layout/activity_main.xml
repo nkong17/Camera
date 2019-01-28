@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.example.nsa.camera.CameraSurfaceView
+        android:id="@+id/surfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:scale_height="200"
+        app:scale_width="100" />
+
+    <com.ssomai.android.scalablelayout.ScalableLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:scale_base_height="200"
+        app:scale_base_width="100"
+        >
+
+        <ImageView
+            android:id="@+id/imageView1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#FCFCFC"
+            app:scale_width="100"
+            app:scale_height="10"
+             />
+
+        <ImageButton
+            android:id="@+id/timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#00000000"
+            android:scaleType="centerInside"
+            android:src="@drawable/timer_wg"
+            app:scale_width="8"
+            app:scale_height="8"
+            app:scale_top="1"
+            app:scale_left="3" />
+
+
+        <TextView
+            android:id="@+id/timerText"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text=""
+            android:textColor="#FCFCFC"
+            app:scale_height="150"
+            app:scale_textsize="20"
+            app:scale_width="100"
+            app:scale_top="10"/>
+
+        <TextView
+            android:id="@+id/recordTimeText"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text=""
+            android:textColor="#FCFCFC"
+            app:scale_height="10"
+            app:scale_textsize="7"
+            app:scale_width="50"
+            app:scale_top="140"
+            app:scale_left="25"/>
+
+        <ImageView
+            android:id="@+id/imageView3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#FCFCFC"
+            app:scale_width="100"
+            app:scale_height="40"
+            app:scale_top="160"
+            />
+
+        <ImageButton
+            android:id="@+id/record_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#00000000"
+            android:scaleType="centerInside"
+            android:src="@drawable/record_btn"
+            app:scale_width="10"
+            app:scale_height="10"
+            app:scale_top="171"
+            app:scale_left="27" />
+
+            <ImageButton
+                android:id="@+id/button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#00000000"
+                android:scaleType="centerInside"
+                android:src="@drawable/camera_btn"
+                app:scale_width="17"
+                app:scale_height="17"
+                app:scale_top="165"
+                app:scale_left="42" />
+
+            <ImageView
+                android:id="@+id/imageView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#00000000"
+                app:scale_width="13"
+                app:scale_height="13"
+                app:scale_top="169"
+                app:scale_left="76"
+                app:srcCompat="@drawable/gallery_icon_wg_2" />
+
+            <SeekBar
+                android:id="@+id/seekBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:scale_width="70"
+                app:scale_height="5"
+                app:scale_top="152"
+                app:scale_left="18"
+                android:progressDrawable="@drawable/seekbar_design"
+                android:thumb="@drawable/seekbar_design2"
+             />
+    </com.ssomai.android.scalablelayout.ScalableLayout>
+</FrameLayout>
