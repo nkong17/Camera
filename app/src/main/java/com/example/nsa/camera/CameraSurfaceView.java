@@ -5,12 +5,10 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.Camera;
-import android.hardware.Sensor;
-import android.hardware.SensorManager;
 import android.media.CamcorderProfile;
-import android.media.ExifInterface;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.CountDownTimer;
@@ -19,15 +17,11 @@ import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.Display;
 import android.view.MotionEvent;
-import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
-import android.view.WindowManager;
-import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
@@ -35,8 +29,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 
 public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Callback{
@@ -66,6 +58,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     private  String filename;
     private long recordTime = 0;
     public   List<Camera.Size> previewSizeList;
+    public int count = 0;
+    private CountDownTimer countDownTimer;
 
     // 필수 생성자
     public CameraSurfaceView(Context context) {
@@ -209,16 +203,54 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     OnClickListener captrureListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
+            if (MainActivity.timerSec > 0) {
+                if (!recording) {
+                    countDownTimer();
+                    countDownTimer.start();
+                } else {
+                    record();
+                }
+            } else {
+                record();
+            }
+        }
+    };
+
+        private void record() {
             if (recording) {
                 MainActivity.recordTimeText.setText("");
-                mediaRecorder.stop();
-                mediaRecorder.release();
-                mCamera.lock();
-                recordTimerDestroy();
-                setRecorderValue();
-                recording = false;
+                try {
+                    mediaRecorder.stop();
+                    mediaRecorder.release();
+                    mCamera.lock();
+                    MainActivity.cameraBtn.setEnabled(true);
+                    recordTimerDestroy();
+                    setRecorderValue();
+                    recording = false;
+                    capture(new Camera.PictureCallback() {
+                        @Override
+                        public void onPictureTaken(byte[] data, Camera camera) {
+                            BitmapFactory.Options options = new BitmapFactory.Options();
+                            options.inSampleSize = 8;
+                            Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                            MainActivity.imageView.setImageBitmap(bitmap);
+                            MainActivity.imageView.setRotation(getCameraRotation(MainActivity.rotate));
+
+                            // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
+                            camera.startPreview();
+                        }
+                    });
+                } catch (final Exception ex) {
+                    MainActivity.recordTimeText.setText("");
+                    ex.printStackTrace();
+                    mediaRecorder.release();
+                    recordTimerDestroy();
+                    recording = false;
+                    return;
+                }
             } else {
                 try {
+                    MainActivity.cameraBtn.setEnabled(false);
                     mediaRecorder = new MediaRecorder();
                     mCamera.unlock();
                     mediaRecorder.setCamera(mCamera);
@@ -233,11 +265,11 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                     mediaRecorder.setProfile(profile);
                     mediaRecorder.setOrientationHint(90);
 
-//                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-//                    mediaRecorder.setVideoSize(previewSizeList.get(0).width ,previewSizeList.get(0).height );
-//                    mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
-//                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-//                    mediaRecorder.setAudioEncoder(3);
+        //                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+        //                    mediaRecorder.setVideoSize(previewSizeList.get(0).width ,previewSizeList.get(0).height );
+        //                    mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
+        //                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+        //                    mediaRecorder.setAudioEncoder(3);
 
                     String cameraDirPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/TEST_CAMERA";
                     File cameraDir = new File(cameraDirPath);
@@ -256,6 +288,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                     recordTimer.start();
                 } catch (final Exception ex) {
                     ex.printStackTrace();
+                    MainActivity.cameraBtn.setEnabled(true);
                     MainActivity.recordTimeText.setText("");
                     mediaRecorder.release();
                     recordTimerDestroy();;
@@ -264,8 +297,32 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                     // Log.i("---","Exception in thread");
                 }
             }
-        }
-    };
+    }
+    public void countDownTimer(){
+
+        count = MainActivity.timerSec / 1000;
+
+        countDownTimer = new CountDownTimer(MainActivity.timerSec, MainActivity.COUNT_DOWN_INTERVAL) {
+            public void onTick(long millisUntilFinished) {
+                MainActivity.countTxt.setText(String.valueOf(count));
+                count = count -1;
+            }
+            public void onFinish() {
+                MainActivity.countTxt.setText("");
+                record();
+                countTimerDestroy();
+            }
+        };
+    }
+
+
+    public void countTimerDestroy() {
+        try{
+            countDownTimer.cancel();
+        } catch (Exception e) {}
+        countDownTimer = null;
+    }
+
 
     private void setRecorderValue() {
         long dateTaken = System.currentTimeMillis();

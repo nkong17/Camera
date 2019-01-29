@@ -3,23 +3,17 @@ package com.example.nsa.camera;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
-import android.hardware.camera2.CameraDevice;
-import android.media.ExifInterface;
-import android.media.MediaRecorder;
 import android.net.Uri;
-import android.os.AsyncTask;
+import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -27,50 +21,38 @@ import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.util.Log;
-import android.view.MotionEvent;
 import android.view.OrientationEventListener;
-import android.view.SurfaceView;
 import android.view.View;
-import android.view.Window;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA = 100;
-    private ImageButton cameraBtn;
+    public static ImageButton cameraBtn;
     private ImageButton timerBtn;
     public static ImageButton record_btn;
-    private ImageView imageView;
+    public static ImageView imageView;
     public SeekBar seekBar;
     private CameraSurfaceView surfaceView;
     private Activity mainActivity = this;
     public static  Context mContext;
     private OrientationEventListener orientEventListener;
-    private TextView countTxt ;
+    public static TextView countTxt ;
     public static TextView recordTimeText ;
     private CountDownTimer countDownTimer;
     public static int rotate = 0;
     public static int timerState = 0;
     public static int timerSec = 0;
     public int count = 0;
+    public static final int COUNT_DOWN_INTERVAL = 1000;
 
-
-    private static final int COUNT_DOWN_INTERVAL = 1000;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
