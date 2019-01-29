@@ -35,28 +35,33 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA = 100;
-    public static ImageButton cameraBtn;
     private ImageButton timerBtn;
-    public static ImageButton record_btn;
-    public static ImageView imageView;
-    public SeekBar seekBar;
+
     private CameraSurfaceView surfaceView;
     private Activity mainActivity = this;
-    public static  Context mContext;
+    public SeekBar seekBar;
     private OrientationEventListener orientEventListener;
+    private CountDownTimer countDownTimer;
+    private int count = 0;
+
+    public static  Context mContext;
+    public static ImageButton cameraBtn;
+    public static ImageButton record_btn;
+    public static ImageView imageView;
     public static TextView countTxt ;
     public static TextView recordTimeText ;
-    private CountDownTimer countDownTimer;
     public static int rotate = 0;
     public static int timerState = 0;
     public static int timerSec = 0;
-    public int count = 0;
     public static final int COUNT_DOWN_INTERVAL = 1000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        CameraApplication camVar = (CameraApplication) getApplication();
+
         setUp();
         checkPermission();
         mContext = this;
@@ -80,9 +85,12 @@ public class MainActivity extends AppCompatActivity {
                 {
                     rotate = 90;
                 }
+                surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
             }
+
         };
         orientEventListener.enable();
+
 
         if (!orientEventListener.canDetectOrientation()) {
             Toast.makeText(this, "Can't DetectOrientation",
@@ -157,22 +165,24 @@ public class MainActivity extends AppCompatActivity {
     }
     private void capture() {
 
-        surfaceView.capture(new Camera.PictureCallback() {
-            @Override
-            public void onPictureTaken(byte[] data, Camera camera) {
-                BitmapFactory.Options options = new BitmapFactory.Options();
-                options.inSampleSize = 8;
-                surfaceView.doInBackground(data);
-                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-//              미리보기 회전
-                imageView.setImageBitmap(bitmap);
-                imageView.setRotation(getCameraRotation(rotate));
-
-                // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
-                camera.startPreview();
-            }
-        });
+        surfaceView.capture(pictureCallback);
     }
+
+    Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
+        @Override
+        public void onPictureTaken(byte[] data, Camera camera) {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = 8;
+            surfaceView.doInBackground(data);
+            Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+//              미리보기 회전
+            imageView.setImageBitmap(bitmap);
+            imageView.setRotation(getCameraRotation(rotate));
+
+            // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
+            camera.startPreview();
+        }
+    };
 
     public void countDownTimer(){
 

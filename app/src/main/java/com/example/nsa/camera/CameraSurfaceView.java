@@ -51,8 +51,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     private String mCameraVideoFilename;
     private Uri videoUri = null;
     private long mRecordingStartTime = 0;
-    private long mMaxVideoDurationInMs = 60000;
-    public int count_r = 0;
     private CountDownTimer recordTimer;
     private String title;
     private  String filename;
@@ -111,6 +109,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
         // 미리보기 화면에 픽셀로 뿌리기 시작! 렌즈로부터 들어온 영상을 뿌려줌.
         parameters.setZoom(0); //  현재 가장 멀리 있는 상태
+
         int orientation = calculatePreviewOrientation(mCameraInfo, mDisplayOrientation);
         mCamera.setDisplayOrientation(orientation);
 
@@ -127,10 +126,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         //손가락 화면 확대 축소
         surfaceView.setOnTouchListener(surfaceTouchListner);
 
-
-
-
         mCamera.startPreview();
+        mCamera.autoFocus(autoFocusCallback);
 
     }
 
@@ -185,14 +182,21 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     }
 
 
+
     // 서피스뷰에서 사진을 찍도록 하는 메서드
-    public boolean capture(Camera.PictureCallback callback){
+    public boolean capture(Camera.PictureCallback pictureCallback){
         if (mCamera != null){
             //사진 회전 추가
+
             parameters.setRotation(getCameraRotation(MainActivity.rotate)); // 저장 사진 회전
             Log.d(TAG, "CAPTURE OR: " + MainActivity.rotate + " / " + getCameraRotation(MainActivity.rotate));
             mCamera.setParameters(parameters);
-            mCamera.takePicture(null, null, callback);
+            mCamera.autoFocus(autoFocusCallback);
+            if (recording) {
+                mCamera.takePicture(null, null, pictureCallback); //소리 안 나게 하려면 shutterCallback 을 null로
+            } else {
+                mCamera.takePicture(shutterCallback, null, pictureCallback); //소리 안 나게 하려면 shutterCallback 을 null로
+            }
             return true;
         } else {
             return false;
@@ -226,7 +230,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                     MainActivity.cameraBtn.setEnabled(true);
                     recordTimerDestroy();
                     setRecorderValue();
-                    recording = false;
                     capture(new Camera.PictureCallback() {
                         @Override
                         public void onPictureTaken(byte[] data, Camera camera) {
@@ -240,6 +243,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                             camera.startPreview();
                         }
                     });
+                    recording = false;
                 } catch (final Exception ex) {
                     MainActivity.recordTimeText.setText("");
                     ex.printStackTrace();
@@ -405,17 +409,25 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     }
 
 
+    Camera.ShutterCallback shutterCallback = new Camera.ShutterCallback() {
+        public void onShutter() {
+
+        }
+    };
+
+    public Camera.AutoFocusCallback autoFocusCallback = new Camera.AutoFocusCallback() {
+        @Override
+        public void onAutoFocus(boolean success, Camera camera) {
+            return;
+        }
+    };
+
+
     public OnTouchListener surfaceTouchListner = new OnTouchListener() {
         public boolean onTouch(View v, MotionEvent event) {
             switch (event.getAction()  & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN: // 싱글 터치
-                    mCamera.autoFocus(new Camera.AutoFocusCallback(){ // 오토 포커스 설정
-                        @Override
-                        public void onAutoFocus(boolean success, Camera camera) {
-                            Log.d(TAG, "싱글 터치");
-                            return;
-                        }
-                    });
+                    mCamera.autoFocus(autoFocusCallback);
                     break;
 
                 case MotionEvent.ACTION_MOVE: // 터치 후 이동 시
