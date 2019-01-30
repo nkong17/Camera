@@ -18,6 +18,9 @@ import android.os.CountDownTimer;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -30,6 +33,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -43,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private OrientationEventListener orientEventListener;
     private CountDownTimer countDownTimer;
     private int count = 0;
+    private TextView sttText ;
 
     public static  Context mContext;
     public static ImageButton cameraBtn;
@@ -54,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
     public static int timerState = 0;
     public static int timerSec = 0;
     public static final int COUNT_DOWN_INTERVAL = 1000;
+    private Intent i;
+    private SpeechRecognizer mRecognizer;
+    private static final String TAG = MainActivity.class.getSimpleName();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +73,15 @@ public class MainActivity extends AppCompatActivity {
         setUp();
         checkPermission();
         mContext = this;
+
+        //음성인식
+        i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+        mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        mRecognizer.setRecognitionListener(recognitionListener);
+        mRecognizer.startListening(i);
+        Log.d(TAG, "[STT] Listening");
 
         orientEventListener = new OrientationEventListener(this, SensorManager.SENSOR_DELAY_NORMAL) {
             @Override
@@ -85,7 +102,9 @@ public class MainActivity extends AppCompatActivity {
                 {
                     rotate = 90;
                 }
-                surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
+                if (surfaceView.mCamera != null) {
+                    surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
+                }
             }
 
         };
@@ -113,6 +132,7 @@ public class MainActivity extends AppCompatActivity {
         surfaceView = (CameraSurfaceView)findViewById(R.id.surfaceView);
         countTxt = (TextView)findViewById(R.id.timerText);
         recordTimeText = (TextView)findViewById(R.id.recordTimeText);
+        sttText = (TextView)findViewById(R.id.sttText);
 //        cameraBtn.bringToFront() ;
 //        timerBtn.bringToFront() ;
 //        imageView.bringToFront() ;
@@ -232,7 +252,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openGallery() {
-
         Uri targetUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
         String targetDir = Environment.getExternalStorageDirectory().toString() + "/TEST_CAMERA";
         targetUri = targetUri.buildUpon().appendQueryParameter("bucketId",String.valueOf(targetDir.toLowerCase().hashCode())).build();
@@ -306,6 +325,55 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private RecognitionListener recognitionListener = new RecognitionListener() {
+        @Override public void onRmsChanged(float rmsdB) {
+        }
 
+        @Override public void onResults(Bundle results) {
+            String key = "";
+            key = SpeechRecognizer.RESULTS_RECOGNITION;
+            ArrayList<String> mResult = results.getStringArrayList(key);
+            String[] rs = new String[mResult.size()];
+            mResult.toArray(rs);
+            Log.d(TAG, "[STT] mResult : " + mResult);
+            sttText.setText(""+rs[0]);
+            String stt = rs[0];
+            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
+                cameraBtn.performClick();
+            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
+                record_btn.performClick();
+
+            mRecognizer.startListening(i);
+        }
+
+        @Override public void onReadyForSpeech(Bundle params) {
+            Log.d(TAG, "[STT] onReadyForSpeech");
+         }
+
+         @Override public void onPartialResults(Bundle partialResults) {
+             Log.d(TAG, "[STT] onPartialResults");
+         }
+
+         @Override public void onEvent(int eventType, Bundle params) {
+             Log.d(TAG, "[STT] onEvent");
+         }
+
+         @Override public void onError(int error) {
+             Log.d(TAG, "[STT] error : " + error);
+             mRecognizer.startListening(i);
+         }
+
+         @Override public void onEndOfSpeech() {
+             Log.d(TAG, "[STT] onEndOfSpeech " );
+         }
+
+         @Override public void onBufferReceived(byte[] buffer) {
+             Log.d(TAG, "[STT] onBufferReceived " );
+         }
+
+         @Override public void onBeginningOfSpeech() {
+             Log.d(TAG, "onBeginningOfSpeech " );
+         }
+    };
 
 }

@@ -66,6 +66,19 @@
             app:scale_top="140"
             app:scale_left="25"/>
 
+        <TextView
+            android:id="@+id/sttText"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text=""
+            android:textColor="#FCFCFC"
+            app:scale_height="10"
+            app:scale_textsize="5"
+            app:scale_width="80"
+            app:scale_top="120"
+            app:scale_left="11"/>
+
         <ImageView
             android:id="@+id/imageView3"
             android:layout_width="wrap_content"
