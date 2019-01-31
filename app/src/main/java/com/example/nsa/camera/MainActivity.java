@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.Camera;
@@ -34,20 +33,23 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA = 100;
+    private static final int REQUEST_TAKE_ALBUM = 101;
+    private static final String TAG = MainActivity.class.getSimpleName();
+
     private ImageButton timerBtn;
 
-    private CameraSurfaceView surfaceView;
     private Activity mainActivity = this;
     public SeekBar seekBar;
     private OrientationEventListener orientEventListener;
-    private CountDownTimer countDownTimer;
-    private int count = 0;
+//    private CountDownTimer countDownTimer;
+//    private int count = 0;
     private TextView sttText ;
+    private Intent i;
+    private SpeechRecognizer mRecognizer;
 
     public static  Context mContext;
     public static ImageButton cameraBtn;
@@ -55,75 +57,54 @@ public class MainActivity extends AppCompatActivity {
     public static ImageView imageView;
     public static TextView countTxt ;
     public static TextView recordTimeText ;
+    public static CameraSurfaceView surfaceView;
     public static int rotate = 0;
     public static int timerState = 0;
     public static int timerSec = 0;
     public static final int COUNT_DOWN_INTERVAL = 1000;
-    private Intent i;
-    private SpeechRecognizer mRecognizer;
-    private static final String TAG = MainActivity.class.getSimpleName();
+    public static Tool tool;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        CameraApplication camVar = (CameraApplication) getApplication();
+        tool = new Tool();
+//        CameraApplication camVar = (CameraApplication) getApplication();
 
         setUp();
         checkPermission();
         mContext = this;
 
         //음성인식
-        i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
-        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
-        mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
-        mRecognizer.setRecognitionListener(recognitionListener);
-        mRecognizer.startListening(i);
-        Log.d(TAG, "[STT] Listening");
+        startListening();
 
+        /**** 기울기 listener start ***/
+        //기울기 측정 리스너
         orientEventListener = new OrientationEventListener(this, SensorManager.SENSOR_DELAY_NORMAL) {
             @Override
             public void onOrientationChanged(int orientation) {
-                if(orientation >= 315 || orientation < 45) {
-                    rotate = 0;
-                }
-                // 90˚
-                else if(orientation >= 45 && orientation < 135) {
-                    rotate = 270;
-                }
-                // 180˚
-                else if(orientation >= 135 && orientation < 225) {
-                    rotate = 180;
-                }
-                // 270˚ (landscape)
-                else if(orientation >= 225 && orientation < 315)
-                {
-                    rotate = 90;
-                }
+                rotate = tool.setRotate(orientation);
+                // 자동초점
                 if (surfaceView.mCamera != null) {
                     surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
                 }
             }
-
         };
+        //리스너 동작
         orientEventListener.enable();
-
-
+        //리스너 탐지 불가
         if (!orientEventListener.canDetectOrientation()) {
             Toast.makeText(this, "Can't DetectOrientation",
                     Toast.LENGTH_LONG).show();
             finish();
         }
-
-
-
+        /**** 기울기 listener end ***/
     }
 
-
-
+    //초기화
     private void setUp() {
+        // 레이아웃 연결
         cameraBtn = (ImageButton)findViewById(R.id.button);
         timerBtn = (ImageButton)findViewById(R.id.timer);
         record_btn = (ImageButton)findViewById(R.id.record_btn);
@@ -133,19 +114,15 @@ public class MainActivity extends AppCompatActivity {
         countTxt = (TextView)findViewById(R.id.timerText);
         recordTimeText = (TextView)findViewById(R.id.recordTimeText);
         sttText = (TextView)findViewById(R.id.sttText);
-//        cameraBtn.bringToFront() ;
-//        timerBtn.bringToFront() ;
-//        imageView.bringToFront() ;
-//        seekBar.bringToFront() ;
-//        countTxt.bringToFront() ;
         seekBar.setProgress(0);
+
+        //클릭리스너
         cameraBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
                 if (timerSec > 0) {
-                    countDownTimer();
-                    countDownTimer.start();
+                    tool.countDownTimer(tool.TIMER_CAMERA);
+                    tool.countDownTimer.start();
                 } else {
                     capture();
                 }
@@ -160,102 +137,77 @@ public class MainActivity extends AppCompatActivity {
         timerBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (timerState == 0) {
-                    timerState = 1;
-                    timerBtn.setImageResource(R.drawable.timer_wg_3);
-                    timerSec  = 3000;
-                } else if (timerState == 1) {
-                    timerState = 2;
-                    timerBtn.setImageResource(R.drawable.timer_wg_5);
-                    timerSec = 5000;
-                } else if (timerState == 2) {
-                    timerState = 0;
-                    timerBtn.setImageResource(R.drawable.timer_wg);
-                    timerSec = 0;
-                }
-
+                setTime(timerState);
             }
         });
-
         seekBar.setOnSeekBarChangeListener(surfaceView.seekBarListener);
     }
 
-    public void setSeekBar(int num) {
-        seekBar.setProgress(num);
-    }
-    private void capture() {
 
-        surfaceView.capture(pictureCallback);
-    }
-
-    Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
+    /****************** callback 함수 start ***************************/
+    public static Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inSampleSize = 8;
             surfaceView.doInBackground(data);
             Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-//              미리보기 회전
+
+            //미리보기 회전
             imageView.setImageBitmap(bitmap);
-            imageView.setRotation(getCameraRotation(rotate));
+            imageView.setRotation(tool.getCameraRotation(rotate));
 
             // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
             camera.startPreview();
         }
     };
+    /****************** callback 함수 end ***************************/
 
-    public void countDownTimer(){
-
-
-        count = timerSec / 1000;
-
-        countDownTimer = new CountDownTimer(timerSec, COUNT_DOWN_INTERVAL) {
-            public void onTick(long millisUntilFinished) {
-                countTxt.setText(String.valueOf(count));
-                count = count -1;
-            }
-            public void onFinish() {
-                countTxt.setText("");
-                capture();
-                countTimerDestroy();
-            }
-        };
+    /****************** 함수 start ***************************/
+    public void startListening() {
+        i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+        mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        mRecognizer.setRecognitionListener(recognitionListener);
+        mRecognizer.startListening(i);
     }
 
-
-    public void countTimerDestroy() {
-        try{
-            countDownTimer.cancel();
-        } catch (Exception e) {}
-        countDownTimer = null;
-    }
-
-
-    public int getCameraRotation( int rotation) {
-        int degrees = 0;
-
-        switch (rotation) {
-            case 0:
-                degrees = 90;
-                break;
-            case 90:
-                degrees = 0;
-                break;
-            case 180:
-                degrees = 270;
-                break;
-            case 270:
-                degrees = 180;
-                break;
+    public void setTime(int ts) {
+        if (ts == 0) {
+            timerState = 1;
+            timerBtn.setImageResource(R.drawable.timer_wg_3);
+            timerSec  = 3000;
+        } else if (ts == 1) {
+            timerState = 2;
+            timerBtn.setImageResource(R.drawable.timer_wg_5);
+            timerSec = 5000;
+        } else if (ts == 2) {
+            timerState = 0;
+            timerBtn.setImageResource(R.drawable.timer_wg);
+            timerSec = 0;
         }
-        return degrees;
     }
 
+    public void setSeekBar(int num) {
+        seekBar.setProgress(num);
+    }
+    public static void capture() {
+        surfaceView.capture(pictureCallback);
+    }
+
+    //갤러리 열기
     private void openGallery() {
         Uri targetUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
         String targetDir = Environment.getExternalStorageDirectory().toString() + "/TEST_CAMERA";
         targetUri = targetUri.buildUpon().appendQueryParameter("bucketId",String.valueOf(targetDir.toLowerCase().hashCode())).build();
-        Intent intent = new Intent(Intent.ACTION_VIEW, targetUri); // 폴더로 이동
+//        Intent intent = new Intent(Intent.ACTION_VIEW, targetUri); // 폴더로 이동
+
+        // 앨범 보여주기
+        Intent intent = new Intent();
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*;video/*");
+        this.startActivityForResult(Intent.createChooser(intent, "Get Album"), REQUEST_TAKE_ALBUM);
 
 //        Intent intent = new Intent(Intent.ACTION_PICK);  //전체 갤러리
 //        intent.setType(android.provider.MediaStore.Images.Media.CONTENT_TYPE);
@@ -264,15 +216,7 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-
-    public static boolean isIntentAvailable(Context context, String action){
-
-        final PackageManager packageManager = context.getPackageManager();
-        final Intent intent = new Intent( action);
-        List<ResolveInfo> list = packageManager.queryIntentActivities( intent, PackageManager.MATCH_DEFAULT_ONLY);
-        return list.size() > 0;
-    }
-
+    //권한 체크
     private void checkPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             //ActivityCompat.requestPermissions((Activity)mContext, new String[] {Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE});
@@ -303,7 +247,9 @@ public class MainActivity extends AppCompatActivity {
 
         }
     }
+    /****************** 함수 End ***************************/
 
+    /********** Activity Result 함수 Start *********************/
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         switch (requestCode) {
@@ -320,11 +266,11 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // other 'case' lines to check for other
-            // permissions this app might request
         }
     }
+    /********** Activity Result 함수 End *********************/
 
+    /********** Listener Start *********************/
     private RecognitionListener recognitionListener = new RecognitionListener() {
         @Override public void onRmsChanged(float rmsdB) {
         }
@@ -359,7 +305,6 @@ public class MainActivity extends AppCompatActivity {
          }
 
          @Override public void onError(int error) {
-             Log.d(TAG, "[STT] error : " + error);
              mRecognizer.startListening(i);
          }
 
@@ -375,5 +320,5 @@ public class MainActivity extends AppCompatActivity {
              Log.d(TAG, "onBeginningOfSpeech " );
          }
     };
-
+/********** Listener End *********************/
 }

@@ -18,12 +18,10 @@ import android.provider.MediaStore;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.SeekBar;
-import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -32,14 +30,11 @@ import java.io.IOException;
 import java.util.List;
 
 public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Callback{
-    private SurfaceHolder mHolder;
-    private CameraSurfaceView surfaceView;
-    public  Camera mCamera = null;
-    Camera.Parameters parameters = null;
-    boolean recording = false;
-    private MediaRecorder mediaRecorder;
 
     public static final String TAG = CameraSurfaceView.class.getSimpleName();
+
+    private SurfaceHolder mHolder;
+    private CameraSurfaceView surfaceView;
     private double touch_interval_X = 0; // X 터치 간격
     private double touch_interval_Y = 0; // Y 터치 간격
     private int zoom_in_count = 0; // 줌 인 카운트
@@ -55,9 +50,12 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     private String title;
     private  String filename;
     private long recordTime = 0;
+    private Camera.Parameters parameters = null;
+    private boolean recording = false;
+    private MediaRecorder mediaRecorder;
+
+    public  Camera mCamera = null;
     public   List<Camera.Size> previewSizeList;
-    public int count = 0;
-    private CountDownTimer countDownTimer;
 
     // 필수 생성자
     public CameraSurfaceView(Context context) {
@@ -68,7 +66,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     // 필수 생성자
     public CameraSurfaceView(Context context, AttributeSet attrs) {
         super(context, attrs);
-
         init(context);
     }
 
@@ -83,7 +80,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     @Override
     public void surfaceCreated(SurfaceHolder surfaceHolder) {
         mCamera = Camera.open(mCameraID); // 카메라 객체를 참조하여 변수에 할당
-//        mCamera.setDisplayOrientation(90); // 이게 없으면 미리보기 화면이 회전되어 나온다.
         parameters = mCamera.getParameters();
         try {
             mCamera.setPreviewDisplay(mHolder); // Camera 객체에 이 서피스뷰를 미리보기로 하도록 설정
@@ -95,9 +91,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
         Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
         Camera.getCameraInfo(mCameraID, cameraInfo);
-
         mCameraInfo = cameraInfo;
-
         previewSizeList = parameters.getSupportedPreviewSizes();
 
         MainActivity.record_btn.setOnClickListener(captrureListener);
@@ -110,7 +104,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         // 미리보기 화면에 픽셀로 뿌리기 시작! 렌즈로부터 들어온 영상을 뿌려줌.
         parameters.setZoom(0); //  현재 가장 멀리 있는 상태
 
-        int orientation = calculatePreviewOrientation(mCameraInfo, mDisplayOrientation);
+        int orientation = MainActivity.tool.calculatePreviewOrientation(mCameraInfo, mDisplayOrientation);
         mCamera.setDisplayOrientation(orientation);
 
         /** 크기 정하기 **/
@@ -119,16 +113,12 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
         requestLayout();
         mCamera.setParameters(parameters);
-
         parameters = mCamera.getParameters();
-
-        Log.d(TAG, parameters.toString());
         //손가락 화면 확대 축소
         surfaceView.setOnTouchListener(surfaceTouchListner);
 
         mCamera.startPreview();
         mCamera.autoFocus(autoFocusCallback);
-
     }
 
     // 없어질 때 호출
@@ -141,6 +131,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     }
 
 
+    /******************************************************** 함수 start ************************************************************************************/
+    //사진 저장
     public Void doInBackground(byte[]... data) {
         FileOutputStream outStream = null;
         try {
@@ -152,19 +144,14 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
             String fileName = String.format("%d.jpg", System.currentTimeMillis());
             File outputFile = new File(path, fileName);
 
-
-
             outStream = new FileOutputStream(outputFile);
             outStream.write(data[0]);
             outStream.flush();
             outStream.close();
-
-            Log.d(TAG, "onPictureTaken - wrote bytes: " + data.length + " to " + outputFile.getAbsolutePath());
             mCamera.startPreview();
+
             // 갤러리에 반영
-            Intent mediaScanIntent = new Intent( Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-            mediaScanIntent.setData(Uri.fromFile(outputFile));
-            getContext().sendBroadcast(mediaScanIntent);
+            mediaScan(Uri.fromFile(outputFile));
 
             try {
                 mCamera.setPreviewDisplay(mHolder);
@@ -181,15 +168,11 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         return null;
     }
 
-
-
     // 서피스뷰에서 사진을 찍도록 하는 메서드
     public boolean capture(Camera.PictureCallback pictureCallback){
         if (mCamera != null){
             //사진 회전 추가
-
-            parameters.setRotation(getCameraRotation(MainActivity.rotate)); // 저장 사진 회전
-            Log.d(TAG, "CAPTURE OR: " + MainActivity.rotate + " / " + getCameraRotation(MainActivity.rotate));
+            parameters.setRotation(MainActivity.tool.getCameraRotation(MainActivity.rotate)); // 저장 사진 회전
             mCamera.setParameters(parameters);
             mCamera.autoFocus(autoFocusCallback);
             if (recording) {
@@ -203,130 +186,87 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         }
     }
 
+    public void record() {
+        if (recording) {
+            MainActivity.recordTimeText.setText("");
+            try {
+                mediaRecorder.stop();
+                mediaRecorder.release();
+                mCamera.lock();
+                MainActivity.cameraBtn.setEnabled(true);
+                recordTimerDestroy();
+                setRecorderValue();
+                capture(new Camera.PictureCallback() {
+                    @Override
+                    public void onPictureTaken(byte[] data, Camera camera) {
+                        BitmapFactory.Options options = new BitmapFactory.Options();
+                        options.inSampleSize = 8;
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                        MainActivity.imageView.setImageBitmap(bitmap);
+                        MainActivity.imageView.setRotation(MainActivity.tool.getCameraRotation(MainActivity.rotate));
 
-    OnClickListener captrureListener = new OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            if (MainActivity.timerSec > 0) {
-                if (!recording) {
-                    countDownTimer();
-                    countDownTimer.start();
-                } else {
-                    record();
-                }
-            } else {
-                record();
+                        // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
+                        camera.startPreview();
+                    }
+                });
+                recording = false;
+
+            } catch (final Exception ex) {
+                MainActivity.recordTimeText.setText("");
+                ex.printStackTrace();
+                mediaRecorder.release();
+                recordTimerDestroy();
+                recording = false;
+                return;
+            }
+        } else {
+            try {
+                MainActivity.cameraBtn.setEnabled(false);
+                mediaRecorder = new MediaRecorder();
+                mCamera.unlock();
+                mediaRecorder.setCamera(mCamera);
+
+                mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+                mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+
+                CamcorderProfile profile =  CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
+                profile.videoFrameWidth = previewSizeList.get(0).width;
+                profile.videoFrameHeight = previewSizeList.get(0).height;
+
+                mediaRecorder.setProfile(profile);
+                mediaRecorder.setOrientationHint(90);
+
+    //                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+    //                    mediaRecorder.setVideoSize(previewSizeList.get(0).width ,previewSizeList.get(0).height );
+    //                    mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
+    //                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+    //                    mediaRecorder.setAudioEncoder(3);
+
+                String cameraDirPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/TEST_CAMERA";
+                File cameraDir = new File(cameraDirPath);
+                cameraDir.mkdirs();
+                title = String.format("%d.mp4", System.currentTimeMillis());
+                filename = cameraDirPath + "/" + title;
+                mediaRecorder.setOutputFile(filename);
+                mediaRecorder.setPreviewDisplay(mHolder.getSurface());
+                mediaRecorder.prepare();
+                mediaRecorder.start();
+                recording = true;
+                mRecordingStartTime = SystemClock.uptimeMillis();
+                recordTime = MainActivity.tool.updateRecordingTime(recording, mRecordingStartTime);
+                recordTimer();
+                recordTimer.start();
+            } catch (final Exception ex) {
+                ex.printStackTrace();
+                MainActivity.cameraBtn.setEnabled(true);
+                MainActivity.recordTimeText.setText("");
+                mediaRecorder.release();
+                recordTimerDestroy();
+                return;
+
             }
         }
-    };
-
-        private void record() {
-            if (recording) {
-                MainActivity.recordTimeText.setText("");
-                try {
-                    mediaRecorder.stop();
-                    mediaRecorder.release();
-                    mCamera.lock();
-                    MainActivity.cameraBtn.setEnabled(true);
-                    recordTimerDestroy();
-                    setRecorderValue();
-                    capture(new Camera.PictureCallback() {
-                        @Override
-                        public void onPictureTaken(byte[] data, Camera camera) {
-                            BitmapFactory.Options options = new BitmapFactory.Options();
-                            options.inSampleSize = 8;
-                            Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-                            MainActivity.imageView.setImageBitmap(bitmap);
-                            MainActivity.imageView.setRotation(getCameraRotation(MainActivity.rotate));
-
-                            // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
-                            camera.startPreview();
-                        }
-                    });
-                    recording = false;
-                } catch (final Exception ex) {
-                    MainActivity.recordTimeText.setText("");
-                    ex.printStackTrace();
-                    mediaRecorder.release();
-                    recordTimerDestroy();
-                    recording = false;
-                    return;
-                }
-            } else {
-                try {
-                    MainActivity.cameraBtn.setEnabled(false);
-                    mediaRecorder = new MediaRecorder();
-                    mCamera.unlock();
-                    mediaRecorder.setCamera(mCamera);
-
-                    mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-                    mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-
-                    CamcorderProfile profile =  CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
-                    profile.videoFrameWidth = previewSizeList.get(0).width;
-                    profile.videoFrameHeight = previewSizeList.get(0).height;
-
-                    mediaRecorder.setProfile(profile);
-                    mediaRecorder.setOrientationHint(90);
-
-        //                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        //                    mediaRecorder.setVideoSize(previewSizeList.get(0).width ,previewSizeList.get(0).height );
-        //                    mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
-        //                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-        //                    mediaRecorder.setAudioEncoder(3);
-
-                    String cameraDirPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/TEST_CAMERA";
-                    File cameraDir = new File(cameraDirPath);
-                    cameraDir.mkdirs();
-                    title = String.format("%d.mp4", System.currentTimeMillis());
-                    filename = cameraDirPath + "/" + title;
-                    mediaRecorder.setOutputFile(filename);
-                    mediaRecorder.setPreviewDisplay(mHolder.getSurface());
-                    mediaRecorder.prepare();
-                    mediaRecorder.start();
-                    recording = true;
-                    mRecordingStartTime = SystemClock.uptimeMillis();
-                    updateRecordingTime();
-                    Toast.makeText(MainActivity.mContext, "start", Toast.LENGTH_SHORT).show();
-                    recordTimer();
-                    recordTimer.start();
-                } catch (final Exception ex) {
-                    ex.printStackTrace();
-                    MainActivity.cameraBtn.setEnabled(true);
-                    MainActivity.recordTimeText.setText("");
-                    mediaRecorder.release();
-                    recordTimerDestroy();;
-                    return;
-
-                    // Log.i("---","Exception in thread");
-                }
-            }
     }
-    public void countDownTimer(){
-
-        count = MainActivity.timerSec / 1000;
-
-        countDownTimer = new CountDownTimer(MainActivity.timerSec, MainActivity.COUNT_DOWN_INTERVAL) {
-            public void onTick(long millisUntilFinished) {
-                MainActivity.countTxt.setText(String.valueOf(count));
-                count = count -1;
-            }
-            public void onFinish() {
-                MainActivity.countTxt.setText("");
-                record();
-                countTimerDestroy();
-            }
-        };
-    }
-
-
-    public void countTimerDestroy() {
-        try{
-            countDownTimer.cancel();
-        } catch (Exception e) {}
-        countDownTimer = null;
-    }
-
 
     private void setRecorderValue() {
         long dateTaken = System.currentTimeMillis();
@@ -343,56 +283,24 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         values.put(MediaStore.Video.Media.DURATION, recordTime);
 
         ContentResolver contentResolver = MainActivity.mContext.getContentResolver();
-
+        //value 세팅
         videoUri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-        MainActivity.mContext.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, videoUri));
 
+        //미디어 새로고침
+        mediaScan(videoUri);
     }
 
-
-    public void updateRecordingTime() {
-        if (!recording) {
-            return;
-        }
-        long now = SystemClock.uptimeMillis();
-        long delta = now - mRecordingStartTime;
-        recordTime = delta;
-        long seconds = delta / 1000;
-        long minutes = seconds / 60;
-        long hours = minutes / 60;
-        long remainderMinutes = minutes - (hours * 60);
-        long remainderSeconds = seconds - (minutes * 60);
-
-        String secondsString = Long.toString(remainderSeconds);
-        if (secondsString.length() < 2) {
-            secondsString = "0" + secondsString;
-        }
-        String minutesString = Long.toString(remainderMinutes);
-        if (minutesString.length() < 2) {
-            minutesString = "0" + minutesString;
-        }
-        String text = minutesString + ":" + secondsString;
-        if (hours > 0) {
-            String hoursString = Long.toString(hours);
-            if (hoursString.length() < 2) {
-                hoursString = "0" + hoursString;
-            }
-            text = hoursString + ":" + text;
-        }
-
-        Log.d(TAG, "time : " + text);
-        MainActivity.recordTimeText.setText(text);
-
-        surfaceView.invalidate();
+    private void mediaScan(Uri uri) {
+        Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+        intent.setData(uri);
+        MainActivity.mContext.sendBroadcast(intent);
     }
 
     public void recordTimer(){
 
         recordTimer = new CountDownTimer(60000, 1000) {
             public void onTick(long millisUntilFinished) {
-                 updateRecordingTime();
-//                recordTimeText.setText(String.valueOf(count));
-//                count_r = count_r + 1;
+                 recordTime = MainActivity.tool.updateRecordingTime(recording, mRecordingStartTime);
             }
             public void onFinish() {
                 MainActivity.recordTimeText.setText("");
@@ -408,21 +316,41 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         recordTimer=null;
     }
 
-
+    /*************************************************************************** 함수 end ************************************************************************************/
+    /******************************************************** callback 함수 start ************************************************************************************/
+    // 카메라 찍을 때 소리내기 위해
     Camera.ShutterCallback shutterCallback = new Camera.ShutterCallback() {
         public void onShutter() {
 
         }
     };
 
+    //자동 초점
     public Camera.AutoFocusCallback autoFocusCallback = new Camera.AutoFocusCallback() {
         @Override
         public void onAutoFocus(boolean success, Camera camera) {
             return;
         }
     };
+    /******************************************************** callback 함수 end ************************************************************************************/
 
+    /******************************************************************* Listener Start ******************************************************************************/
 
+    OnClickListener captrureListener = new OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            if (MainActivity.timerSec > 0) {
+                if (!recording) {
+                    MainActivity.tool.countDownTimer(MainActivity.tool.TIMER_RECORD);
+                    MainActivity.tool.countDownTimer.start();
+                } else {
+                    record();
+                }
+            } else {
+                record();
+            }
+        }
+    };
     public OnTouchListener surfaceTouchListner = new OnTouchListener() {
         public boolean onTouch(View v, MotionEvent event) {
             switch (event.getAction()  & MotionEvent.ACTION_MASK) {
@@ -500,58 +428,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
         }
     };
-
-    public int getCameraRotation( int rotation) {
-        int degrees = 0;
-
-        switch (rotation) {
-            case 0:
-                degrees = 90;
-                break;
-            case 90:
-                degrees = 0;
-                break;
-            case 180:
-                degrees = 270;
-                break;
-            case 270:
-                degrees = 180;
-                break;
-        }
-        return degrees;
-    }
-
-    /**
-     * 안드로이드 디바이스 방향에 맞는 카메라 프리뷰를 화면에 보여주기 위해 계산합니다.
-     */
-    public int calculatePreviewOrientation(Camera.CameraInfo info, int rotation) {
-        int degrees = 0;
+    /******************************************************************* Listener End ******************************************************************************/
 
 
-        switch (rotation) {
-            case Surface.ROTATION_0:
-                degrees = 0;
-                break;
-            case Surface.ROTATION_90:
-                degrees = 80;
-                break;
-            case Surface.ROTATION_180:
-                degrees = 180;
-                break;
-            case Surface.ROTATION_270:
-                degrees = 270;
-                break;
-        }
-        int result;
-
-        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            result = (info.orientation + degrees) % 360;
-            result = (360 - result) % 360;  // compensate the mirror
-        } else {  // back-facing
-            result = (info.orientation - degrees + 360) % 360;
-        }
-        Log.d(TAG, "rotation : " + rotation + " ORIENTATION : "  +   degrees + " RESULT : " + result);
-        return result;
-    }
 
 }
