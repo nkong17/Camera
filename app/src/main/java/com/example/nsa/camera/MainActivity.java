@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.Camera;
@@ -22,6 +23,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.OrientationEventListener;
@@ -32,12 +34,16 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA = 100;
     private static final int REQUEST_TAKE_ALBUM = 101;
+    private final int SELECT_IMAGE = 1;
+    private final int SELECT_MOVIE = 2;
+
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private ImageButton timerBtn;
@@ -144,7 +150,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    /****************** callback 함수 start ***************************/
+    /************************************************************ callback 함수 start *********************************************************************/
     public static Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
@@ -161,9 +167,9 @@ public class MainActivity extends AppCompatActivity {
             camera.startPreview();
         }
     };
-    /****************** callback 함수 end ***************************/
+    /************************************************************ callback 함수 end *********************************************************************/
 
-    /****************** 함수 start ***************************/
+    /********************************************************************************* 함수 start *********************************************************************/
     public void startListening() {
         i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
@@ -204,16 +210,20 @@ public class MainActivity extends AppCompatActivity {
 //        Intent intent = new Intent(Intent.ACTION_VIEW, targetUri); // 폴더로 이동
 
         // 앨범 보여주기
-        Intent intent = new Intent();
-        intent.setAction(Intent.ACTION_GET_CONTENT);
+//        Intent intent = new Intent();
+//        intent.setAction(Intent.ACTION_GET_CONTENT);
+//        intent.setType("image/*;video/*");
+//        this.startActivityForResult(Intent.createChooser(intent, "Get Album"), SELECT_IMAGE);
+
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT, null);
         intent.setType("image/*;video/*");
-        this.startActivityForResult(Intent.createChooser(intent, "Get Album"), REQUEST_TAKE_ALBUM);
+        intent.putExtra("return-data", true);
+        startActivityForResult(intent, SELECT_IMAGE);
+
 
 //        Intent intent = new Intent(Intent.ACTION_PICK);  //전체 갤러리
 //        intent.setType(android.provider.MediaStore.Images.Media.CONTENT_TYPE);
 //        intent.setData(targetUri);
-
-        startActivity(intent);
     }
 
     //권한 체크
@@ -247,9 +257,86 @@ public class MainActivity extends AppCompatActivity {
 
         }
     }
-    /****************** 함수 End ***************************/
+    /************************************************************ 함수 End *********************************************************************/
 
-    /********** Activity Result 함수 Start *********************/
+    /**************************************************** Activity Result 함수 Start ***************************************************************/
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+
+        super.onActivityResult(requestCode, resultCode, intent);
+        if (resultCode == this.RESULT_CANCELED) {
+            return;
+        }
+        if (resultCode == RESULT_OK)
+        {
+            if (requestCode == SELECT_IMAGE)
+            {
+                Uri uri = intent.getData();
+                String path = getPath(uri);
+                String name = getName(uri);
+                String uriId = getUriId(uri);
+                Log.e("###", "실제경로 : " + path + "\n파일명 : " + name + "\nuri : " + uri.toString() + "\nuri id : " + uriId);
+
+                Intent in = new Intent(Intent.ACTION_VIEW);
+                if (path != null) {
+                    File file = new File(path);
+                    Uri uriFromFile = FileProvider.getUriForFile(this, "com.example.nsa.camera.fileprovider", file);
+                    if (path.contains(".mp4")) {
+                        in.setDataAndType(uriFromFile, "video/*");
+                    } else {
+                        in.setDataAndType(uriFromFile, "image/*");
+                    }
+
+                } else {
+//                    in.setDataAndType(Uri.fromFile(new File(name)),"image/*");
+                    in.setDataAndType(uri,"image/*");
+                }
+                in.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(in);
+            }
+        }
+    }
+    // 실제 경로 찾기
+    private String getPath(Uri uri)
+    {
+        if( uri == null ) {
+            return null;
+        }
+        // 미디어스토어에서 유저가 선택한 사진의 URI를 받아온다.
+        String[] projection = { MediaStore.Images.Media.DATA };
+        Cursor cursor = managedQuery(uri, projection, null, null, null);
+        if( cursor != null ){
+            int column_index = cursor
+                    .getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            cursor.moveToFirst();
+            return cursor.getString(column_index);
+        }
+        // URI경로를 반환한다.
+        return uri.getPath();
+    }
+
+    // 파일명 찾기
+    private String getName(Uri uri)
+    {
+        String[] projection = { MediaStore.Images.ImageColumns.DISPLAY_NAME };
+        Cursor cursor = managedQuery(uri, projection, null, null, null);
+        int column_index = cursor
+                .getColumnIndexOrThrow(MediaStore.Images.ImageColumns.DISPLAY_NAME);
+        cursor.moveToFirst();
+        return cursor.getString(column_index);
+    }
+
+    // uri 아이디 찾기
+    private String getUriId(Uri uri)
+    {
+        String[] projection = { MediaStore.Images.ImageColumns._ID };
+        Cursor cursor = managedQuery(uri, projection, null, null, null);
+        int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.ImageColumns._ID);
+        cursor.moveToFirst();
+        return cursor.getString(column_index);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         switch (requestCode) {
@@ -268,9 +355,9 @@ public class MainActivity extends AppCompatActivity {
 
         }
     }
-    /********** Activity Result 함수 End *********************/
+    /**************************************************** Activity Result 함수 End ***************************************************************/
 
-    /********** Listener Start *********************/
+    /**************************************************** Listener Start ************************************************************************************/
     private RecognitionListener recognitionListener = new RecognitionListener() {
         @Override public void onRmsChanged(float rmsdB) {
         }
@@ -320,5 +407,5 @@ public class MainActivity extends AppCompatActivity {
              Log.d(TAG, "onBeginningOfSpeech " );
          }
     };
-/********** Listener End *********************/
+/**************************************************** Listener End ************************************************************************************/
 }

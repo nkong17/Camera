@@ -3,7 +3,6 @@ package com.example.nsa.camera;
 import android.hardware.Camera;
 import android.os.CountDownTimer;
 import android.os.SystemClock;
-import android.util.Log;
 import android.view.Surface;
 
 public class Tool {

@@ -54,6 +54,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     private boolean recording = false;
     private MediaRecorder mediaRecorder;
 
+
+
     public  Camera mCamera = null;
     public   List<Camera.Size> previewSizeList;
 
@@ -94,7 +96,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         mCameraInfo = cameraInfo;
         previewSizeList = parameters.getSupportedPreviewSizes();
 
-        MainActivity.record_btn.setOnClickListener(captrureListener);
+        MainActivity.record_btn.setOnClickListener(recordListener);
     }
 
     /* 서피스뷰가 크기와 같은 것이 변경되는 시점에 호출
@@ -336,7 +338,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
     /******************************************************************* Listener Start ******************************************************************************/
 
-    OnClickListener captrureListener = new OnClickListener() {
+    OnClickListener recordListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
             if (MainActivity.timerSec > 0) {
@@ -365,7 +367,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                         double now_interval_Y = (double) Math.abs(event.getY(0) - event.getY(1)); // 두 손가락 Y좌표 차이 절대값
                         if(touch_interval_X < now_interval_X && touch_interval_Y < now_interval_Y) { // 이전 값과 비교
                             // 여기에 확대기능에 대한 코드를 정의 하면됩니다. (두 손가락을 벌렸을 때 분기점입니다.)
-                            Log.d(TAG, "터치 손가락 2개일 때 확대");
                             zoom_in_count++;
                             if(zoom_in_count > 5) { // 카운트를 세는 이유 : 너무 많은 호출을 줄이기 위해
                                 zoom_in_count = 0;
@@ -380,7 +381,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                         }
                         if(touch_interval_X > now_interval_X && touch_interval_Y > now_interval_Y) {
                             // 여기에 축소기능에 대한 코드를 정의 하면됩니다. (두 손가락 사이를 좁혔을 때 분기점입니다.)
-                            Log.d(TAG, "터치 손가락 2개일 때 축소");
                             zoom_out_count++;
                             if(zoom_out_count > 5) {
                                 zoom_out_count = 0;
