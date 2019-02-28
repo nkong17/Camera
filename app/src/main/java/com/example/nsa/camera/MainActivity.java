@@ -10,6 +10,10 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PointF;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.net.Uri;
@@ -26,7 +30,10 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.OrientationEventListener;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -34,10 +41,22 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.vision.Frame;
+import com.google.android.gms.vision.face.Face;
+import com.google.android.gms.vision.face.FaceDetector;
+import com.google.android.gms.vision.face.Landmark;
+
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.JavaCameraView;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+
 import java.io.File;
 import java.util.ArrayList;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
     private static final int REQUEST_CAMERA = 100;
     private static final int REQUEST_TAKE_ALBUM = 101;
@@ -69,6 +88,9 @@ public class MainActivity extends AppCompatActivity {
     public static int timerSec = 0;
     public static final int COUNT_DOWN_INTERVAL = 1000;
     public static Tool tool;
+//    private CameraBridgeViewBase mOpenCvCameraView;
+
+    FaceDetector detector = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         tool = new Tool();
-//        CameraApplication camVar = (CameraApplication) getApplication();
 
         setUp();
         checkPermission();
@@ -106,8 +127,102 @@ public class MainActivity extends AppCompatActivity {
             finish();
         }
         /**** 기울기 listener end ***/
+
+//        mOpenCvCameraView = (CameraBridgeViewBase)findViewById(R.id.cv_surface_view);
+        surfaceView.setVisibility(SurfaceView.VISIBLE);
+        surfaceView.setCvCameraViewListener(this);
+        surfaceView.setCameraIndex(0); // front-camera(1),  back-camera(0)
+        mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+
     }
 
+
+    /********************************* openCV start *****************************************/
+    private static final String TAG2 = "opencv";
+    private Mat matInput;
+    private Mat matResult;
+
+    public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
+
+    static {
+        System.loadLibrary("opencv_java4");
+        System.loadLibrary("native-lib");
+    }
+
+    @Override
+    public void onPause()
+    {
+        super.onPause();
+        if (surfaceView != null)
+            surfaceView.disableView();
+    }
+
+    @Override
+    public void onResume()
+    {
+        super.onResume();
+
+        if (!OpenCVLoader.initDebug()) {
+            Log.d(TAG, "onResume :: Internal OpenCV library not found.");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_2_0, this, mLoaderCallback);
+
+        } else {
+            Log.d(TAG, "onResum :: OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
+    }
+
+    public void onDestroy() {
+        super.onDestroy();
+
+        if (surfaceView != null)
+            surfaceView.disableView();
+    }
+
+    @Override
+    public void onCameraViewStarted(int width, int height) {
+        Log.d(TAG, "onCameraViewStarted:: OpenCV ");
+    }
+
+    @Override
+    public void onCameraViewStopped() {
+        Log.d(TAG, "onCameraViewStopped:: OpenCV ");
+    }
+
+    @Override
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        Log.d(TAG, "onCameraFrame :: OpenCV onCameraFrame");
+        matInput = inputFrame.rgba();
+
+        if ( matResult == null )
+            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
+
+        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
+
+        return matResult;
+    }
+
+
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            Log.i(TAG, "OpenCV mLoaderCallback");
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+                {
+                    Log.i(TAG, "OpenCV loaded successfully");
+                    surfaceView.enableView();
+                } break;
+                default:
+                {
+                    super.onManagerConnected(status);
+                } break;
+            }
+
+        }
+    };
+
+    /********************************* openCV end *****************************************/
     //초기화
     private void setUp() {
         // 레이아웃 연결
@@ -147,7 +262,19 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         seekBar.setOnSeekBarChangeListener(surfaceView.seekBarListener);
+
+        detector = new com.google.android.gms.vision.face.FaceDetector.Builder(this)
+                .setTrackingEnabled(false)
+                .setLandmarkType(com.google.android.gms.vision.face.FaceDetector.ALL_LANDMARKS)
+                .setClassificationType(com.google.android.gms.vision.face.FaceDetector.ALL_CLASSIFICATIONS)
+                .build();
     }
+
+    static {
+        System.loadLibrary("opencv_java4");
+        System.loadLibrary("native-lib");
+    }
+
 
 
     /************************************************************ callback 함수 start *********************************************************************/
@@ -278,10 +405,13 @@ public class MainActivity extends AppCompatActivity {
                 String uriId = getUriId(uri);
                 Log.e("###", "실제경로 : " + path + "\n파일명 : " + name + "\nuri : " + uri.toString() + "\nuri id : " + uriId);
 
+                Log.d("###", "FACE : scanFaces " + uri.toString());
                 Intent in = new Intent(Intent.ACTION_VIEW);
                 if (path != null) {
                     File file = new File(path);
                     Uri uriFromFile = FileProvider.getUriForFile(this, "com.example.nsa.camera.fileprovider", file);
+                    Log.d("###", "FACE : scanFaces2 " + uriFromFile.toString());
+                    scanFaces(uriFromFile);
                     if (path.contains(".mp4")) {
                         in.setDataAndType(uriFromFile, "video/*");
                     } else {
@@ -289,12 +419,79 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                 } else {
+                    Log.d("###", "FACE : scanFaces3 " + uri.toString());
+                    scanFaces(uri);
 //                    in.setDataAndType(Uri.fromFile(new File(name)),"image/*");
                     in.setDataAndType(uri,"image/*");
                 }
                 in.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivity(in);
             }
+        }
+    }
+    private Bitmap decodeBitmapUri(Context ctx, Uri uri) {
+        int targetW = 600;
+        int targetH = 600;
+        BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+        bmOptions.inJustDecodeBounds = true;
+        Bitmap b = null;
+        try {
+            BitmapFactory.decodeStream(ctx.getContentResolver().openInputStream(uri), null, bmOptions);
+            int photoW = bmOptions.outWidth;
+            int photoH = bmOptions.outHeight;
+
+            int scaleFactor = Math.min(photoW / targetW, photoH / targetH);
+            bmOptions.inJustDecodeBounds = false;
+            bmOptions.inSampleSize = scaleFactor;
+
+             b = BitmapFactory.decodeStream(ctx.getContentResolver()
+                    .openInputStream(uri), null, bmOptions);
+        } catch (Exception e) {
+
+        }
+        return b;
+    }
+
+    private void scanFaces(Uri uri)  {
+        Bitmap bitmap = decodeBitmapUri(this, uri);
+        if (detector.isOperational() && bitmap != null) {
+            Bitmap editedBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap
+                    .getHeight(), bitmap.getConfig());
+            float scale = getResources().getDisplayMetrics().density;
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(Color.rgb(255, 61, 61));
+            paint.setTextSize((int) (14 * scale));
+            paint.setShadowLayer(1f, 0f, 1f, Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3f);
+            Canvas canvas = new Canvas(editedBitmap);
+            canvas.drawBitmap(bitmap, 0, 0, paint);
+            Frame frame = new Frame.Builder().setBitmap(editedBitmap).build();
+            SparseArray<Face> faces = detector.detect(frame);
+            for (int index = 0; index < faces.size(); ++index) {
+                Face face = faces.valueAt(index);
+                canvas.drawRect(
+                        face.getPosition().x,
+                        face.getPosition().y,
+                        face.getPosition().x + face.getWidth(),
+                        face.getPosition().y + face.getHeight(), paint);
+
+                for (Landmark landmark : face.getLandmarks()) {
+                    int cx = (int) (landmark.getPosition().x);
+                    int cy = (int) (landmark.getPosition().y);
+                    canvas.drawCircle(cx, cy, 5, paint);
+                }
+            }
+
+            if (faces.size() == 0) {
+                Log.d(TAG,"FACE : Scan Failed: Found nothing to scan");
+            } else {
+                imageView.setImageBitmap(editedBitmap);
+                Log.d(TAG,"FACE : of Faces Detected  : " + faces.size() + "\n");
+                Toast.makeText(MainActivity.mContext,  "FACE : " + faces.size() + "\n", Toast.LENGTH_SHORT);
+            }
+        } else {
+            Log.d(TAG,"FACE : Could not set up the detector!");
         }
     }
     // 실제 경로 찾기
@@ -381,7 +578,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override public void onReadyForSpeech(Bundle params) {
             Log.d(TAG, "[STT] onReadyForSpeech");
-         }
+    }
 
          @Override public void onPartialResults(Bundle partialResults) {
              Log.d(TAG, "[STT] onPartialResults");
@@ -408,4 +605,6 @@ public class MainActivity extends AppCompatActivity {
          }
     };
 /**************************************************** Listener End ************************************************************************************/
+
+
 }

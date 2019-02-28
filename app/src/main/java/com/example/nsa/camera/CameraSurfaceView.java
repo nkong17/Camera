@@ -7,7 +7,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.hardware.Camera;
+import android.hardware.camera2.params.Face;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -17,19 +21,28 @@ import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.widget.SeekBar;
+
+
+import com.google.android.gms.vision.Frame;
+import com.google.android.gms.vision.MultiProcessor;
+import com.google.android.gms.vision.face.FaceDetector;
+import com.google.android.gms.vision.face.Landmark;
+
+import org.opencv.android.JavaCameraView;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
-public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Callback{
+public class CameraSurfaceView extends org.opencv.android.JavaCameraView implements SurfaceHolder.Callback, Camera.PictureCallback {
 
     public static final String TAG = CameraSurfaceView.class.getSimpleName();
 
@@ -54,15 +67,26 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     private boolean recording = false;
     private MediaRecorder mediaRecorder;
 
-
-
     public  Camera mCamera = null;
     public   List<Camera.Size> previewSizeList;
 
-    // 필수 생성자
-    public CameraSurfaceView(Context context) {
-        super(context);
-        init(context);
+    /** faceDetector **/
+
+
+    @Override
+    public void onPictureTaken(byte[] data, Camera camera) {
+        Log.i(TAG, "Saving a bitmap to file");
+        // The camera preview was automatically stopped. Start it again.
+        mCamera.startPreview();
+        mCamera.setPreviewCallback(this);
+
+        // Write the image in a file (in jpeg format)
+        try {
+
+        } catch (Exception e) {
+            Log.e("PictureDemo", "Exception in photoCallback", e);
+        }
+
     }
 
     // 필수 생성자
@@ -97,6 +121,8 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         previewSizeList = parameters.getSupportedPreviewSizes();
 
         MainActivity.record_btn.setOnClickListener(recordListener);
+
+
     }
 
     /* 서피스뷰가 크기와 같은 것이 변경되는 시점에 호출
@@ -122,6 +148,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         mCamera.startPreview();
         mCamera.autoFocus(autoFocusCallback);
     }
+
 
     // 없어질 때 호출
     @Override
