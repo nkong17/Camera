@@ -6,7 +6,19 @@
     android:layout_height="match_parent">
 
 
+    <com.example.nsa.camera.CameraSurfacePreview
+        android:id="@+id/surfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:scale_height="200"
+        app:scale_width="100"
+        >
+        <com.example.nsa.camera.CameraOverlay
+            android:id="@+id/faceOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
+    </com.example.nsa.camera.CameraSurfacePreview>
 
     <com.ssomai.android.scalablelayout.ScalableLayout
         android:layout_width="match_parent"
@@ -14,26 +26,13 @@
         app:scale_base_height="200"
         app:scale_base_width="100"
         >
-
-        <!--<com.example.nsa.camera.CameraSurfacePreview-->
-            <!--android:id="@+id/preview"-->
+        <!--<com.example.nsa.camera.CameraSurfaceView-->
+            <!--android:id="@+id/face_detect_view"-->
             <!--android:layout_width="match_parent"-->
             <!--android:layout_height="match_parent"-->
             <!--app:scale_height="200"-->
             <!--app:scale_width="100"-->
-            <!--&gt;-->
-        <com.example.nsa.camera.CameraSurfaceView
-            android:id="@+id/surfaceView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:scale_height="200"
-            app:scale_width="100"
-            />
-        <!--<com.example.nsa.camera.CameraOverlay-->
-            <!--android:id="@+id/faceOverlay"-->
-            <!--android:layout_width="match_parent"-->
-            <!--android:layout_height="match_parent" />-->
-        <!--</com.example.nsa.camera.CameraSurfacePreview>-->
+            <!--/>-->
         <!--<org.opencv.android.JavaCameraView-->
             <!--android:id="@+id/cv_surface_view"-->
             <!--android:layout_width="match_parent"-->

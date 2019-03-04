@@ -7,11 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.RectF;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
@@ -24,11 +19,10 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.widget.SeekBar;
 
-import com.google.android.gms.vision.CameraSource;
+import org.opencv.android.JavaCameraView;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -36,20 +30,18 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 
-import static com.example.nsa.camera.MainActivity.overlay;
+public class CameraSurfaceViewBk extends JavaCameraView implements SurfaceHolder.Callback, Camera.PictureCallback {
 
-public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Callback, Camera.PictureCallback {
-
-    public static final String TAG = CameraSurfaceView.class.getSimpleName();
+    public static final String TAG = CameraSurfaceViewBk.class.getSimpleName();
 
     private SurfaceHolder mHolder;
-    private CameraSurfaceView surfaceView;
+    private CameraSurfaceViewBk surfaceView;
     private double touch_interval_X = 0; // X 터치 간격
     private double touch_interval_Y = 0; // Y 터치 간격
     private int zoom_in_count = 0; // 줌 인 카운트
     private int zoom_out_count = 0; // 줌 아웃 카운트
     private int touch_zoom = 0; // 줌 크기
-    public Camera.CameraInfo mCameraInfo;
+    private Camera.CameraInfo mCameraInfo;
     private int mCameraID = 0;  // 0  ->  CAMERA_FACING_BACK // 1  ->  CAMERA_FACING_FRONT
     private int mDisplayOrientation;
     private String mCameraVideoFilename;
@@ -65,19 +57,16 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
     public  Camera mCamera = null;
     public   List<Camera.Size> previewSizeList;
-    public CameraSource mCameraSource = null;
+
     /** faceDetector **/
-    Paint paint = new Paint();
-    Matrix matrix = new Matrix();
-    RectF rect = new RectF();
-//    Camera.Face[] faces;
-//    RenderingThread mRThread;
+
 
     @Override
     public void onPictureTaken(byte[] data, Camera camera) {
         Log.i(TAG, "Saving a bitmap to file");
         // The camera preview was automatically stopped. Start it again.
         mCamera.startPreview();
+        mCamera.setPreviewCallback(this);
 
         // Write the image in a file (in jpeg format)
         try {
@@ -89,7 +78,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     }
 
     // 필수 생성자
-    public CameraSurfaceView(Context context, AttributeSet attrs) {
+    public CameraSurfaceViewBk(Context context, AttributeSet attrs) {
         super(context, attrs);
         init(context);
     }
@@ -99,8 +88,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         mHolder = getHolder(); // 서피스뷰 내에 있는 SurfaceHolder 라고 하는 객체를 참조할 수 있다.
         mHolder.addCallback(this); // holder
         mDisplayOrientation = ((Activity)context).getWindowManager().getDefaultDisplay().getRotation();
-//        mRThread = new CameraSurfaceView.RenderingThread(mHolder, this);
-        setFocusable(true);
     }
 
     // 서피스뷰가 메모리에 만들어지는 시점에 호출됨
@@ -114,23 +101,23 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
             e.printStackTrace();
         }
 
-        surfaceView = (CameraSurfaceView)findViewById(R.id.surfaceView);
+        surfaceView = (CameraSurfaceViewBk)findViewById(R.id.surfaceView);
 
         Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
         Camera.getCameraInfo(mCameraID, cameraInfo);
         mCameraInfo = cameraInfo;
         previewSizeList = parameters.getSupportedPreviewSizes();
-        mCamera.setFaceDetectionListener(faceDetectionListener);
+
         MainActivity.record_btn.setOnClickListener(recordListener);
 
-//        mRThread.start();
+
     }
 
     /* 서피스뷰가 크기와 같은 것이 변경되는 시점에 호출
      * 화면에 보여지기 전 크기가 결정되는 시점 */
     @Override
     public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-        // 미리보기 화면에 픽셀로 뿌리기 시작! 렌즈로부터 들어온 영상을 뿌려줌. `
+        // 미리보기 화면에 픽셀로 뿌리기 시작! 렌즈로부터 들어온 영상을 뿌려줌.
         parameters.setZoom(0); //  현재 가장 멀리 있는 상태
 
         int orientation = MainActivity.tool.calculatePreviewOrientation(mCameraInfo, mDisplayOrientation);
@@ -145,9 +132,9 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         parameters = mCamera.getParameters();
         //손가락 화면 확대 축소
         surfaceView.setOnTouchListener(surfaceTouchListner);
+
         mCamera.startPreview();
         mCamera.autoFocus(autoFocusCallback);
-        mCamera.startFaceDetection();
     }
 
 
@@ -158,111 +145,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         // 여러 프로그램에서 동시에 쓸 때 한쪽에서 lock 을 걸어 사용할 수 없는 상태가 될 수 있기 때문에, release 를 꼭 해주어야함
         mCamera.release(); // 리소스 해제
         mCamera = null;
-//        try {
-//            mRThread.join();
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
     }
-
-
-/**************************************************** Face Detect ************************************************************/
-    Camera.FaceDetectionListener faceDetectionListener = new Camera.FaceDetectionListener() {
-        @Override
-        public void onFaceDetection(Camera.Face[] faces, Camera camera) {
-            Log.d(TAG, "onFaceDetection: faces=" + faces.length);
-            overlay.faces = faces;
-            overlay.invalidate();
-        }
-    };
-
-//
-//    class RenderingThread extends Thread {
-//
-//        private int x = 0;
-//        private int quadWidth = 100;
-//        private int quadHeight = 100;
-//        private SurfaceHolder mThreadSurfaceHolder;
-//        private CameraSurfaceView mThreadSurfaceView;
-//
-//
-//        public RenderingThread(SurfaceHolder surfaceHolder, CameraSurfaceView surfaceView) {
-//            mThreadSurfaceHolder = surfaceHolder;
-//            mThreadSurfaceView = surfaceView;
-//            Log.d("RenderingThread", "RenderingThread()");
-//        }
-//
-//        public void run() {
-//            Log.d(TAG, "faceDetectionListener RenderingThread");
-//
-//
-//            Canvas canvas = null;
-//            try{
-//                while (true) {
-//                    canvas = mThreadSurfaceHolder.lockCanvas(null);
-//                    synchronized (mThreadSurfaceHolder) {
-//                        if (mThreadSurfaceHolder.getSurface().isValid()) {
-//                            Log.d(TAG, "faceDetectionListener RenderingThread  while (true)");
-//                            Paint mPaint = new Paint();
-//                            mPaint.setColor(Color.WHITE);
-//                            canvas.drawRect(0, 0, 1080 , 1920, mPaint);
-//                            mPaint.setColor(Color.RED);
-//                            Log.d(TAG, "faceDetectionListener mHolder setColor");
-//                            canvas.drawRect(x, x, x - quadWidth, x - quadHeight, mPaint);
-//
-//                            x += 5;
-//                            if (x - quadWidth >= 1080) {
-//                                x = 0;
-//                            }
-//                            Log.d(TAG, "faceDetectionListener mHolder setColor");
-////                            paint.setStyle(Paint.Style.STROKE);
-////                            paint.setStrokeWidth(3);
-////
-////                            //                    canvas.drawColor(Color.TRANSPARENT);
-////                            Paint paint = new Paint();
-////                            paint.setColor(Color.RED);
-////                            paint.setStyle(Paint.Style.STROKE);
-////                            paint.setStrokeWidth(3);
-////                            paint.setTextSize(Math.min(getWidth(), getHeight()) / 20);
-////                            if (faces != null) {
-////                                Log.d(TAG, "faceDetectionListener faces != null");
-////                                for (Camera.Face face : faces) {
-////                                    Matrix matrix = new Matrix();
-////                                    boolean mirror = (mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT);
-////                                    matrix.setScale(mirror ? -1 : 1, 1);
-////                                    matrix.postScale(getWidth() / 2000f, getHeight() / 2000f);
-////                                    matrix.postTranslate(getWidth() / 2f, getHeight() / 2f);
-////
-////                                    // 現在のマトリックスを保存
-////                                    int saveCount = canvas.save();
-////                                    // 顔認識のマトリックスをキャンバスに反映
-////                                    canvas.concat(matrix);
-////                                    canvas.drawText("" + face.score, (face.rect.right + face.rect.left) / 2, (face.rect.top + face.rect.bottom) / 2, paint);
-////                                    // 矩形を描画
-////                                    canvas.drawRect(face.rect, paint);
-////                                    // 保存したマトリックスを戻す
-////                                    canvas.restoreToCount(saveCount);
-////                                    mHolder.unlockCanvasAndPost(canvas);
-////                                    SystemClock.sleep(1000);
-////
-////                                }
-////                            } else {
-////                                SystemClock.sleep(1000);
-////                            }
-//                        }
-//                    }
-//                }
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//            }finally {
-//                if (canvas != null) {
-//                    mThreadSurfaceHolder.unlockCanvasAndPost(canvas);
-//                }
-//            }
-//        }
-//    } // RenderingThread
-
-    /****************************************************** Face Detect ******************************************************************/
 
 
     /******************************************************** 함수 start ************************************************************************************/

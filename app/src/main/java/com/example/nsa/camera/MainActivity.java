@@ -3,6 +3,7 @@ package com.example.nsa.camera;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -12,13 +13,13 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.PointF;
+import android.graphics.Point;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.CountDownTimer;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -30,38 +31,34 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.util.SparseArray;
+import android.view.Display;
 import android.view.OrientationEventListener;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.face.Face;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.vision.CameraSource;
+import com.google.android.gms.vision.MultiProcessor;
+import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.FaceDetector;
-import com.google.android.gms.vision.face.Landmark;
-
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.JavaCameraView;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
-import org.opencv.core.Mat;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 
-public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
+public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA = 100;
     private static final int REQUEST_TAKE_ALBUM = 101;
     private final int SELECT_IMAGE = 1;
     private final int SELECT_MOVIE = 2;
+    private static final int RC_HANDLE_GMS = 9001;
 
     private static final String TAG = MainActivity.class.getSimpleName();
 
@@ -88,9 +85,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public static int timerSec = 0;
     public static final int COUNT_DOWN_INTERVAL = 1000;
     public static Tool tool;
-//    private CameraBridgeViewBase mOpenCvCameraView;
+    public static  CameraSource mCameraSource;
 
-    FaceDetector detector = null;
+    public static FaceDetector detector = null;
+    private static CameraSurfacePreview mPreview;
+    private CameraOverlay cameraOverlay;
+    public static  OverlayView overlay;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,9 +113,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             public void onOrientationChanged(int orientation) {
                 rotate = tool.setRotate(orientation);
                 // 자동초점
-                if (surfaceView.mCamera != null) {
-                    surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
-                }
+//                if (surfaceView.mCamera != null) {
+//                    surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
+//                }
             }
         };
         //리스너 동작
@@ -128,101 +128,68 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
         /**** 기울기 listener end ***/
 
-//        mOpenCvCameraView = (CameraBridgeViewBase)findViewById(R.id.cv_surface_view);
-        surfaceView.setVisibility(SurfaceView.VISIBLE);
-        surfaceView.setCvCameraViewListener(this);
-        surfaceView.setCameraIndex(0); // front-camera(1),  back-camera(0)
-        mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        overlay = new OverlayView(this);
 
+        addContentView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
+    class OverlayView extends View {
+        Camera.Face[] faces;
+        Camera.CameraInfo info = new Camera.CameraInfo();
 
-    /********************************* openCV start *****************************************/
-    private static final String TAG2 = "opencv";
-    private Mat matInput;
-    private Mat matResult;
-
-    public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
-
-    static {
-        System.loadLibrary("opencv_java4");
-        System.loadLibrary("native-lib");
-    }
-
-    @Override
-    public void onPause()
-    {
-        super.onPause();
-        if (surfaceView != null)
-            surfaceView.disableView();
-    }
-
-    @Override
-    public void onResume()
-    {
-        super.onResume();
-
-        if (!OpenCVLoader.initDebug()) {
-            Log.d(TAG, "onResume :: Internal OpenCV library not found.");
-            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_2_0, this, mLoaderCallback);
-
-        } else {
-            Log.d(TAG, "onResum :: OpenCV library found inside package. Using it!");
-            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        public OverlayView(Context context) {
+            super(context);
+            // TODO Auto-generated constructor stub
+            setFocusable(true);
+            Camera.getCameraInfo(0, info);
         }
-    }
 
-    public void onDestroy() {
-        super.onDestroy();
-
-        if (surfaceView != null)
-            surfaceView.disableView();
-    }
-
-    @Override
-    public void onCameraViewStarted(int width, int height) {
-        Log.d(TAG, "onCameraViewStarted:: OpenCV ");
-    }
-
-    @Override
-    public void onCameraViewStopped() {
-        Log.d(TAG, "onCameraViewStopped:: OpenCV ");
-    }
-
-    @Override
-    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        Log.d(TAG, "onCameraFrame :: OpenCV onCameraFrame");
-        matInput = inputFrame.rgba();
-
-        if ( matResult == null )
-            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
-
-        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
-
-        return matResult;
-    }
-
-
-    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
-        public void onManagerConnected(int status) {
-            Log.i(TAG, "OpenCV mLoaderCallback");
-            switch (status) {
-                case LoaderCallbackInterface.SUCCESS:
-                {
-                    Log.i(TAG, "OpenCV loaded successfully");
-                    surfaceView.enableView();
-                } break;
-                default:
-                {
-                    super.onManagerConnected(status);
-                } break;
+        protected void onDraw(Canvas canvas) {
+            // TODO Auto-generated method stub
+            super.onDraw(canvas);
+            Display display = getWindowManager().getDefaultDisplay();
+            Point size = new Point();
+            display.getSize(size);
+
+            Log.d(TAG, "[WIDTH] Display : " + size.x+ " / " + size.y);
+            Log.d(TAG, "[WIDTH] Canvas: " + canvas.getWidth()+ " / " + canvas.getHeight());
+            Log.d(TAG, "[WIDTH] Overlay : " + overlay.getWidth()+ " / " + overlay.getHeight());
+            canvas.drawColor(Color.TRANSPARENT);
+            Paint paint = new Paint();
+            paint.setColor(Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3);
+            paint.setTextSize(Math.min(getWidth(), getHeight()) / 50);
+            Log.d(TAG, "CANVAS : " + getWidth()+ " / " + getHeight());
+            if (faces != null) {
+                for (Camera.Face face : faces) {
+                    Matrix matrix = new Matrix();
+
+//                    boolean mirror = (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT);
+//                    matrix.setScale(mirror ? -1 : 1, 1);
+//                    matrix.postScale(getWidth() / 1500f, getHeight() / 2000f);
+                    matrix.postTranslate(getWidth() / 1.5f, getHeight() / 2.5f);
+
+                    // 現在のマトリックスを保存
+                    int saveCount = canvas.save();
+                    // 顔認識のマトリックスをキャンバスに反映
+//                    canvas.concat(matrix);
+                    Log.d(TAG, "right :" +  face.rect.right + " left :"  + face.rect.left + " top :" + face.rect.top + " bottom :" + face.rect.bottom );
+                    canvas.drawText("" + face.score, (face.rect.right + face.rect.left) / 2, (face.rect.top + face.rect.bottom) / 2, paint);
+                    // 矩形を描画
+//                    canvas.drawRect(face.rect, paint);
+                    canvas.drawPoint(face.rect.centerX() ,face.rect.centerY(), paint);
+                    canvas.drawRect(face.rect.centerX()-100,face.rect.centerY()+50,face.rect.centerX()+50,face.rect.centerY()-100, paint);
+
+                    // 保存したマトリックスを戻す
+                    canvas.restoreToCount(saveCount);
+                }
             }
-
         }
-    };
 
-    /********************************* openCV end *****************************************/
+    }
+
     //초기화
     private void setUp() {
         // 레이아웃 연결
@@ -235,6 +202,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         countTxt = (TextView)findViewById(R.id.timerText);
         recordTimeText = (TextView)findViewById(R.id.recordTimeText);
         sttText = (TextView)findViewById(R.id.sttText);
+//        mPreview = (CameraSurfacePreview) findViewById(R.id.preview);
+        cameraOverlay = (CameraOverlay) findViewById(R.id.faceOverlay);
         seekBar.setProgress(0);
 
         //클릭리스너
@@ -263,21 +232,131 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         });
         seekBar.setOnSeekBarChangeListener(surfaceView.seekBarListener);
 
-        detector = new com.google.android.gms.vision.face.FaceDetector.Builder(this)
-                .setTrackingEnabled(false)
-                .setLandmarkType(com.google.android.gms.vision.face.FaceDetector.ALL_LANDMARKS)
-                .setClassificationType(com.google.android.gms.vision.face.FaceDetector.ALL_CLASSIFICATIONS)
-                .build();
+//        createCameraSource();
+    }
+/**************************************************************** Camera Source Start **********************************************************************/
+private void createCameraSource() {
+    Log.d(TAG, "FaceDetector : createCameraSource()");
+    Context context = getApplicationContext();
+    detector = new com.google.android.gms.vision.face.FaceDetector.Builder(context)
+            .setTrackingEnabled(false)
+            .setLandmarkType(com.google.android.gms.vision.face.FaceDetector.ALL_LANDMARKS)
+            .setClassificationType(com.google.android.gms.vision.face.FaceDetector.ALL_CLASSIFICATIONS)
+            .build();
+
+//    detector.setProcessor(
+//            new MultiProcessor.Builder<>(new MainActivity.GraphicFaceTrackerFactory())
+//                    .build());
+
+    if (!detector.isOperational()) {
+        Log.e(TAG, "FaceDetector : dependencies are not yet available.");
     }
 
-    static {
-        System.loadLibrary("opencv_java4");
-        System.loadLibrary("native-lib");
+    Log.d(TAG, "FaceDetector : made detector()");
+
+    mCameraSource = new CameraSource
+            .Builder(this, detector)
+            .setFacing(CameraSource.CAMERA_FACING_BACK)
+            .setRequestedFps(29.8f) // 프레임 높을 수록 리소스를 많이 먹겠죠
+            .setRequestedPreviewSize(1080, 1920)
+            .setAutoFocusEnabled(true)  // AutoFocus를 안하면 초점을 못 잡아서 화질이 많이 흐립니다.
+            .build();
+}
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+//        startCameraSource();
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+//        mPreview.stop();
+    }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+//        if (mCameraSource != null) {
+//            mCameraSource.release();
+//        }
+    }
+
+    private void startCameraSource() {
+
+        Log.d(TAG, "FaceDetector : startCameraSource()");
+
+        int code = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(getApplicationContext());
+
+        if (code != ConnectionResult.SUCCESS) {
+            Dialog dlg = GoogleApiAvailability.getInstance().getErrorDialog(this, code, RC_HANDLE_GMS);
+            dlg.show();
+        }
+
+        if (mCameraSource != null) {
+            try {
+                mPreview.start(mCameraSource, cameraOverlay);
+                Log.d(TAG, "FaceDetector : mPreview.start()");
+            } catch (IOException e) {
+                Log.e(TAG, "FaceDetector : Unable to start camera source.", e);
+                mCameraSource.release();
+                mCameraSource = null;
+            }
+        }
+
+    }
+
+//    private class GraphicFaceTrackerFactory implements MultiProcessor.Factory<Face> {
+//
+//        @Override
+//        public Tracker<Face> create(Face face) {
+//            Log.d(TAG, "FaceDetector : Tracker<Face> create");
+//            return new MainActivity.GraphicFaceTracker(cameraOverlay);
+//        }
+//    }
+//
+//    private class GraphicFaceTracker extends Tracker<Face> {
+//
+//        private CameraOverlay mOverlay;
+//        private FaceOverlayGraphics faceOverlayGraphics;
+//
+//        GraphicFaceTracker(CameraOverlay overlay) {
+//            mOverlay = overlay;
+//            faceOverlayGraphics = new FaceOverlayGraphics(overlay);
+//        }
+//
+//        @Override
+//        public void onNewItem(int faceId, Face item) {
+//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onNewItem");
+//            faceOverlayGraphics.setId(faceId);
+//        }
+//
+//        @Override
+//        public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
+//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onUpdate");
+//            mOverlay.add(faceOverlayGraphics);
+//            faceOverlayGraphics.updateFace(face);
+//        }
+//
+//        @Override
+//        public void onMissing(FaceDetector.Detections<Face> detectionResults) {
+//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onMissing");
+//            mOverlay.remove(faceOverlayGraphics);
+//        }
+//
+//        @Override
+//        public void onDone() {
+//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onDone");
+//            mOverlay.remove(faceOverlayGraphics);
+//        }
+//    }
+
+/**************************************************************** Camera Source End **********************************************************************/
 
     /************************************************************ callback 함수 start *********************************************************************/
+
+
     public static Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
@@ -386,6 +465,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     }
     /************************************************************ 함수 End *********************************************************************/
 
+
     /**************************************************** Activity Result 함수 Start ***************************************************************/
 
     @Override
@@ -410,8 +490,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 if (path != null) {
                     File file = new File(path);
                     Uri uriFromFile = FileProvider.getUriForFile(this, "com.example.nsa.camera.fileprovider", file);
-                    Log.d("###", "FACE : scanFaces2 " + uriFromFile.toString());
-                    scanFaces(uriFromFile);
                     if (path.contains(".mp4")) {
                         in.setDataAndType(uriFromFile, "video/*");
                     } else {
@@ -420,8 +498,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
                 } else {
                     Log.d("###", "FACE : scanFaces3 " + uri.toString());
-                    scanFaces(uri);
-//                    in.setDataAndType(Uri.fromFile(new File(name)),"image/*");
                     in.setDataAndType(uri,"image/*");
                 }
                 in.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -452,48 +528,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         return b;
     }
 
-    private void scanFaces(Uri uri)  {
-        Bitmap bitmap = decodeBitmapUri(this, uri);
-        if (detector.isOperational() && bitmap != null) {
-            Bitmap editedBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap
-                    .getHeight(), bitmap.getConfig());
-            float scale = getResources().getDisplayMetrics().density;
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            paint.setColor(Color.rgb(255, 61, 61));
-            paint.setTextSize((int) (14 * scale));
-            paint.setShadowLayer(1f, 0f, 1f, Color.WHITE);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(3f);
-            Canvas canvas = new Canvas(editedBitmap);
-            canvas.drawBitmap(bitmap, 0, 0, paint);
-            Frame frame = new Frame.Builder().setBitmap(editedBitmap).build();
-            SparseArray<Face> faces = detector.detect(frame);
-            for (int index = 0; index < faces.size(); ++index) {
-                Face face = faces.valueAt(index);
-                canvas.drawRect(
-                        face.getPosition().x,
-                        face.getPosition().y,
-                        face.getPosition().x + face.getWidth(),
-                        face.getPosition().y + face.getHeight(), paint);
 
-                for (Landmark landmark : face.getLandmarks()) {
-                    int cx = (int) (landmark.getPosition().x);
-                    int cy = (int) (landmark.getPosition().y);
-                    canvas.drawCircle(cx, cy, 5, paint);
-                }
-            }
-
-            if (faces.size() == 0) {
-                Log.d(TAG,"FACE : Scan Failed: Found nothing to scan");
-            } else {
-                imageView.setImageBitmap(editedBitmap);
-                Log.d(TAG,"FACE : of Faces Detected  : " + faces.size() + "\n");
-                Toast.makeText(MainActivity.mContext,  "FACE : " + faces.size() + "\n", Toast.LENGTH_SHORT);
-            }
-        } else {
-            Log.d(TAG,"FACE : Could not set up the detector!");
-        }
-    }
     // 실제 경로 찾기
     private String getPath(Uri uri)
     {
@@ -606,5 +641,90 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     };
 /**************************************************** Listener End ************************************************************************************/
 
-
+//    /********************************* openCV start *****************************************/
+//    private static final String TAG2 = "opencv";
+//    private Mat matInput;
+//    private Mat matResult;
+//
+//    public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
+//
+//    static {
+//        System.loadLibrary("opencv_java4");
+//        System.loadLibrary("native-lib");
+//    }
+//
+//    @Override
+//    public void onPause()
+//    {
+//        super.onPause();
+//        if (surfaceView != null)
+//            surfaceView.disableView();
+//    }
+//
+//    @Override
+//    public void onResume()
+//    {
+//        super.onResume();
+//
+//        if (!OpenCVLoader.initDebug()) {
+//            Log.d(TAG, "onResume :: Internal OpenCV library not found.");
+//            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_2_0, this, mLoaderCallback);
+//
+//        } else {
+//            Log.d(TAG, "onResum :: OpenCV library found inside package. Using it!");
+//            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+//        }
+//    }
+//
+//    public void onDestroy() {
+//        super.onDestroy();
+//
+//        if (surfaceView != null)
+//            surfaceView.disableView();
+//    }
+//
+//    @Override
+//    public void onCameraViewStarted(int width, int height) {
+//        Log.d(TAG, "onCameraViewStarted:: OpenCV ");
+//    }
+//
+//    @Override
+//    public void onCameraViewStopped() {
+//        Log.d(TAG, "onCameraViewStopped:: OpenCV ");
+//    }
+//
+//    @Override
+//    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+//        Log.d(TAG, "onCameraFrame :: OpenCV onCameraFrame");
+//        matInput = inputFrame.rgba();
+//
+//        if ( matResult == null )
+//            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
+//
+//        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
+//
+//        return matResult;
+//    }
+//
+//
+//    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+//        @Override
+//        public void onManagerConnected(int status) {
+//            Log.i(TAG, "OpenCV mLoaderCallback");
+//            switch (status) {
+//                case LoaderCallbackInterface.SUCCESS:
+//                {
+//                    Log.i(TAG, "OpenCV loaded successfully");
+//                    surfaceView.enableView();
+//                } break;
+//                default:
+//                {
+//                    super.onManagerConnected(status);
+//                } break;
+//            }
+//
+//        }
+//    };
+//
+//    /********************************* openCV end *****************************************/
 }
