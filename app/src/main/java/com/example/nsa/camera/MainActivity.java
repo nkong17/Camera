@@ -18,6 +18,7 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -51,6 +52,7 @@ import com.google.android.gms.vision.face.FaceDetector;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -70,9 +72,10 @@ public class MainActivity extends AppCompatActivity {
 //    private CountDownTimer countDownTimer;
 //    private int count = 0;
     private TextView sttText ;
-    private Intent i;
-    private SpeechRecognizer mRecognizer;
+    public static Intent i;
 
+
+    public static SpeechRecognizer mRecognizer;
     public static  Context mContext;
     public static ImageButton cameraBtn;
     public static ImageButton record_btn;
@@ -85,12 +88,9 @@ public class MainActivity extends AppCompatActivity {
     public static int timerSec = 0;
     public static final int COUNT_DOWN_INTERVAL = 1000;
     public static Tool tool;
-    public static  CameraSource mCameraSource;
 
-    public static FaceDetector detector = null;
-    private static CameraSurfacePreview mPreview;
-    private CameraOverlay cameraOverlay;
     public static  OverlayView overlay;
+    public static AudioManager audioManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,17 +113,15 @@ public class MainActivity extends AppCompatActivity {
             public void onOrientationChanged(int orientation) {
                 rotate = tool.setRotate(orientation);
                 // 자동초점
-//                if (surfaceView.mCamera != null) {
-//                    surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
-//                }
+                if (surfaceView.mCamera != null) {
+                    surfaceView.mCamera.autoFocus(surfaceView.autoFocusCallback);
+                }
             }
         };
         //리스너 동작
         orientEventListener.enable();
         //리스너 탐지 불가
         if (!orientEventListener.canDetectOrientation()) {
-            Toast.makeText(this, "Can't DetectOrientation",
-                    Toast.LENGTH_LONG).show();
             finish();
         }
         /**** 기울기 listener end ***/
@@ -131,63 +129,6 @@ public class MainActivity extends AppCompatActivity {
         overlay = new OverlayView(this);
 
         addContentView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-    }
-
-    class OverlayView extends View {
-        Camera.Face[] faces;
-        Camera.CameraInfo info = new Camera.CameraInfo();
-
-        public OverlayView(Context context) {
-            super(context);
-            // TODO Auto-generated constructor stub
-            setFocusable(true);
-            Camera.getCameraInfo(0, info);
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            // TODO Auto-generated method stub
-            super.onDraw(canvas);
-            Display display = getWindowManager().getDefaultDisplay();
-            Point size = new Point();
-            display.getSize(size);
-
-            Log.d(TAG, "[WIDTH] Display : " + size.x+ " / " + size.y);
-            Log.d(TAG, "[WIDTH] Canvas: " + canvas.getWidth()+ " / " + canvas.getHeight());
-            Log.d(TAG, "[WIDTH] Overlay : " + overlay.getWidth()+ " / " + overlay.getHeight());
-            canvas.drawColor(Color.TRANSPARENT);
-            Paint paint = new Paint();
-            paint.setColor(Color.WHITE);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(3);
-            paint.setTextSize(Math.min(getWidth(), getHeight()) / 50);
-            Log.d(TAG, "CANVAS : " + getWidth()+ " / " + getHeight());
-            if (faces != null) {
-                for (Camera.Face face : faces) {
-                    Matrix matrix = new Matrix();
-
-//                    boolean mirror = (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT);
-//                    matrix.setScale(mirror ? -1 : 1, 1);
-//                    matrix.postScale(getWidth() / 1500f, getHeight() / 2000f);
-                    matrix.postTranslate(getWidth() / 1.5f, getHeight() / 2.5f);
-
-                    // 現在のマトリックスを保存
-                    int saveCount = canvas.save();
-                    // 顔認識のマトリックスをキャンバスに反映
-//                    canvas.concat(matrix);
-                    Log.d(TAG, "right :" +  face.rect.right + " left :"  + face.rect.left + " top :" + face.rect.top + " bottom :" + face.rect.bottom );
-                    canvas.drawText("" + face.score, (face.rect.right + face.rect.left) / 2, (face.rect.top + face.rect.bottom) / 2, paint);
-                    // 矩形を描画
-//                    canvas.drawRect(face.rect, paint);
-                    canvas.drawPoint(face.rect.centerX() ,face.rect.centerY(), paint);
-                    canvas.drawRect(face.rect.centerX()-100,face.rect.centerY()+50,face.rect.centerX()+50,face.rect.centerY()-100, paint);
-
-                    // 保存したマトリックスを戻す
-                    canvas.restoreToCount(saveCount);
-                }
-            }
-        }
-
     }
 
     //초기화
@@ -202,8 +143,6 @@ public class MainActivity extends AppCompatActivity {
         countTxt = (TextView)findViewById(R.id.timerText);
         recordTimeText = (TextView)findViewById(R.id.recordTimeText);
         sttText = (TextView)findViewById(R.id.sttText);
-//        mPreview = (CameraSurfacePreview) findViewById(R.id.preview);
-        cameraOverlay = (CameraOverlay) findViewById(R.id.faceOverlay);
         seekBar.setProgress(0);
 
         //클릭리스너
@@ -231,128 +170,115 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         seekBar.setOnSeekBarChangeListener(surfaceView.seekBarListener);
+        audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 
-//        createCameraSource();
     }
-/**************************************************************** Camera Source Start **********************************************************************/
-private void createCameraSource() {
-    Log.d(TAG, "FaceDetector : createCameraSource()");
-    Context context = getApplicationContext();
-    detector = new com.google.android.gms.vision.face.FaceDetector.Builder(context)
-            .setTrackingEnabled(false)
-            .setLandmarkType(com.google.android.gms.vision.face.FaceDetector.ALL_LANDMARKS)
-            .setClassificationType(com.google.android.gms.vision.face.FaceDetector.ALL_CLASSIFICATIONS)
-            .build();
-
-//    detector.setProcessor(
-//            new MultiProcessor.Builder<>(new MainActivity.GraphicFaceTrackerFactory())
-//                    .build());
-
-    if (!detector.isOperational()) {
-        Log.e(TAG, "FaceDetector : dependencies are not yet available.");
-    }
-
-    Log.d(TAG, "FaceDetector : made detector()");
-
-    mCameraSource = new CameraSource
-            .Builder(this, detector)
-            .setFacing(CameraSource.CAMERA_FACING_BACK)
-            .setRequestedFps(29.8f) // 프레임 높을 수록 리소스를 많이 먹겠죠
-            .setRequestedPreviewSize(1080, 1920)
-            .setAutoFocusEnabled(true)  // AutoFocus를 안하면 초점을 못 잡아서 화질이 많이 흐립니다.
-            .build();
-}
 
     @Override
     protected void onResume() {
+        Log.d(TAG, "onResume");
         super.onResume();
-//        startCameraSource();
+        if(mRecognizer != null)
+        {
+            mRecognizer.destroy();
+            audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false);
+        }
+        startListening();
     }
 
     @Override
     protected void onPause() {
+        Log.d(TAG, "onPause");
         super.onPause();
-//        mPreview.stop();
+        if(mRecognizer != null)
+        {
+            mRecognizer.destroy();
+            audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false);
+        }
     }
 
     @Override
     protected void onDestroy() {
+        Log.d(TAG, "onDestroy");
+        if(mRecognizer != null)
+        {
+            mRecognizer.destroy();
+            audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false);
+        }
         super.onDestroy();
-//        if (mCameraSource != null) {
-//            mCameraSource.release();
-//        }
     }
 
-    private void startCameraSource() {
+    @Override
+    protected void onStop() {
+        Log.d(TAG, "onStop");
+        super.onStop();
+    }
 
-        Log.d(TAG, "FaceDetector : startCameraSource()");
 
-        int code = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(getApplicationContext());
+    /************************************************************ Face Detection *********************************************************************/
 
-        if (code != ConnectionResult.SUCCESS) {
-            Dialog dlg = GoogleApiAvailability.getInstance().getErrorDialog(this, code, RC_HANDLE_GMS);
-            dlg.show();
+    class OverlayView extends View {
+        Camera.Face[] faces;
+        Camera.CameraInfo info = new Camera.CameraInfo();
+
+        public OverlayView(Context context) {
+            super(context);
+            // TODO Auto-generated constructor stub
+            setFocusable(true);
+            Camera.getCameraInfo(0, info);
         }
 
-        if (mCameraSource != null) {
-            try {
-                mPreview.start(mCameraSource, cameraOverlay);
-                Log.d(TAG, "FaceDetector : mPreview.start()");
-            } catch (IOException e) {
-                Log.e(TAG, "FaceDetector : Unable to start camera source.", e);
-                mCameraSource.release();
-                mCameraSource = null;
+        @Override
+        protected void onDraw(Canvas canvas) {
+            // TODO Auto-generated method stub
+            super.onDraw(canvas);
+            Display display = getWindowManager().getDefaultDisplay();
+            Point size = new Point();
+            display.getSize(size);
+
+            canvas.drawColor(Color.TRANSPARENT);
+            Paint paint = new Paint();
+            paint.setColor(Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3);
+            paint.setTextSize(Math.min(getWidth(), getHeight()) / 50);
+
+            canvas.rotate(90, getWidth()/2, getHeight()/2);
+            canvas.save();
+            ArrayList<Camera.Area> arraylist = new ArrayList<Camera.Area>();
+
+            if (faces != null && faces.length > 0) {
+                for (Camera.Face face : faces) {
+                    Matrix matrix = new Matrix();
+
+                    boolean mirror = (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT);
+                    matrix.setScale(mirror ? -1 : 1, 1);
+                    if (rotate == 0 || rotate == 270) {
+                        matrix.postScale(getWidth() / 1100f, getHeight() / 4000f);
+                    } else {
+                        matrix.postScale(getHeight() / 1900f, getWidth() / 1900f);
+                    }
+                    matrix.postTranslate(getWidth() / 1.8f, getHeight() / 2f);
+
+                    int saveCount = canvas.save();
+                    canvas.concat(matrix);
+//                    canvas.drawText("" + face.score, (face.rect.right + face.rect.left) / 2, (face.rect.top + face.rect.bottom) / 2, paint);
+                    canvas.drawRect(face.rect, paint);
+//                    canvas.drawRect(face.rect.centerX()-100,face.rect.centerY()+50,face.rect.centerX()+50,face.rect.centerY()-100, paint);
+
+                    canvas.restoreToCount(saveCount);
+
+                }
+//                arraylist.add(new Camera.Area(faces[0].rect., 1000)); // 지정된 영역을 100%의 가중치를 두겠다는 의미입니다.
+//
+//                surfaceView.setArea(arraylist);
             }
         }
 
     }
 
-//    private class GraphicFaceTrackerFactory implements MultiProcessor.Factory<Face> {
-//
-//        @Override
-//        public Tracker<Face> create(Face face) {
-//            Log.d(TAG, "FaceDetector : Tracker<Face> create");
-//            return new MainActivity.GraphicFaceTracker(cameraOverlay);
-//        }
-//    }
-//
-//    private class GraphicFaceTracker extends Tracker<Face> {
-//
-//        private CameraOverlay mOverlay;
-//        private FaceOverlayGraphics faceOverlayGraphics;
-//
-//        GraphicFaceTracker(CameraOverlay overlay) {
-//            mOverlay = overlay;
-//            faceOverlayGraphics = new FaceOverlayGraphics(overlay);
-//        }
-//
-//        @Override
-//        public void onNewItem(int faceId, Face item) {
-//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onNewItem");
-//            faceOverlayGraphics.setId(faceId);
-//        }
-//
-//        @Override
-//        public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
-//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onUpdate");
-//            mOverlay.add(faceOverlayGraphics);
-//            faceOverlayGraphics.updateFace(face);
-//        }
-//
-//        @Override
-//        public void onMissing(FaceDetector.Detections<Face> detectionResults) {
-//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onMissing");
-//            mOverlay.remove(faceOverlayGraphics);
-//        }
-//
-//        @Override
-//        public void onDone() {
-//            Log.d(TAG, "FaceDetector : GraphicFaceTracker onDone");
-//            mOverlay.remove(faceOverlayGraphics);
-//        }
-//    }
 
-/**************************************************************** Camera Source End **********************************************************************/
+
 
     /************************************************************ callback 함수 start *********************************************************************/
 
@@ -371,19 +297,34 @@ private void createCameraSource() {
 
             // 사진을 찍게 되면 미리보기가 중지된다. 다시 미리보기를 시작하려면...
             camera.startPreview();
+
         }
     };
     /************************************************************ callback 함수 end *********************************************************************/
 
     /********************************************************************************* 함수 start *********************************************************************/
+
+    Thread th = new Thread(new Runnable() {
+        @Override
+        public void run() {
+            //구현 내용
+        }
+    });
+
+
     public void startListening() {
+
+        audioManager.setStreamMute(AudioManager.STREAM_MUSIC, true);
+        Log.d(TAG,"startListening");
         i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 6000);
         mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
         mRecognizer.setRecognitionListener(recognitionListener);
         mRecognizer.startListening(i);
     }
+
 
     public void setTime(int ts) {
         if (ts == 0) {
@@ -483,9 +424,9 @@ private void createCameraSource() {
                 String path = getPath(uri);
                 String name = getName(uri);
                 String uriId = getUriId(uri);
-                Log.e("###", "실제경로 : " + path + "\n파일명 : " + name + "\nuri : " + uri.toString() + "\nuri id : " + uriId);
+//                Log.e("###", "실제경로 : " + path + "\n파일명 : " + name + "\nuri : " + uri.toString() + "\nuri id : " + uriId);
 
-                Log.d("###", "FACE : scanFaces " + uri.toString());
+//                Log.d("###", "FACE : scanFaces " + uri.toString());
                 Intent in = new Intent(Intent.ACTION_VIEW);
                 if (path != null) {
                     File file = new File(path);
@@ -497,7 +438,6 @@ private void createCameraSource() {
                     }
 
                 } else {
-                    Log.d("###", "FACE : scanFaces3 " + uri.toString());
                     in.setDataAndType(uri,"image/*");
                 }
                 in.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -505,28 +445,7 @@ private void createCameraSource() {
             }
         }
     }
-    private Bitmap decodeBitmapUri(Context ctx, Uri uri) {
-        int targetW = 600;
-        int targetH = 600;
-        BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-        bmOptions.inJustDecodeBounds = true;
-        Bitmap b = null;
-        try {
-            BitmapFactory.decodeStream(ctx.getContentResolver().openInputStream(uri), null, bmOptions);
-            int photoW = bmOptions.outWidth;
-            int photoH = bmOptions.outHeight;
-
-            int scaleFactor = Math.min(photoW / targetW, photoH / targetH);
-            bmOptions.inJustDecodeBounds = false;
-            bmOptions.inSampleSize = scaleFactor;
-
-             b = BitmapFactory.decodeStream(ctx.getContentResolver()
-                    .openInputStream(uri), null, bmOptions);
-        } catch (Exception e) {
-
-        }
-        return b;
-    }
+//
 
 
     // 실제 경로 찾기
@@ -590,7 +509,7 @@ private void createCameraSource() {
     /**************************************************** Activity Result 함수 End ***************************************************************/
 
     /**************************************************** Listener Start ************************************************************************************/
-    private RecognitionListener recognitionListener = new RecognitionListener() {
+    public RecognitionListener recognitionListener = new RecognitionListener() {
         @Override public void onRmsChanged(float rmsdB) {
         }
 
@@ -608,7 +527,12 @@ private void createCameraSource() {
             else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
                 record_btn.performClick();
 
-            mRecognizer.startListening(i);
+            if(mRecognizer != null)
+            {
+                mRecognizer.destroy();
+            }
+            startListening();
+//            mRecognizer.startListening(i);
         }
 
         @Override public void onReadyForSpeech(Bundle params) {
@@ -624,11 +548,27 @@ private void createCameraSource() {
          }
 
          @Override public void onError(int error) {
-             mRecognizer.startListening(i);
+             Log.d(TAG, "[STT] onError");
+             if(mRecognizer != null)
+             {
+                 mRecognizer.destroy();
+             }
+             startListening();
+//             mRecognizer.cancel();
+//             mRecognizer.startListening(i);
+//             if(mRecognizer != null)
+//             {
+//                 mRecognizer.destroy();
+//             }
+//            mRecognizer.startListening(i);
          }
 
          @Override public void onEndOfSpeech() {
-             Log.d(TAG, "[STT] onEndOfSpeech " );
+
+            Log.d(TAG, "[STT] onEndOfSpeech " );
+//             mRecognizer.startListening(i);
+
+//             mRecognizer.startListening(i);
          }
 
          @Override public void onBufferReceived(byte[] buffer) {
@@ -641,90 +581,4 @@ private void createCameraSource() {
     };
 /**************************************************** Listener End ************************************************************************************/
 
-//    /********************************* openCV start *****************************************/
-//    private static final String TAG2 = "opencv";
-//    private Mat matInput;
-//    private Mat matResult;
-//
-//    public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
-//
-//    static {
-//        System.loadLibrary("opencv_java4");
-//        System.loadLibrary("native-lib");
-//    }
-//
-//    @Override
-//    public void onPause()
-//    {
-//        super.onPause();
-//        if (surfaceView != null)
-//            surfaceView.disableView();
-//    }
-//
-//    @Override
-//    public void onResume()
-//    {
-//        super.onResume();
-//
-//        if (!OpenCVLoader.initDebug()) {
-//            Log.d(TAG, "onResume :: Internal OpenCV library not found.");
-//            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_2_0, this, mLoaderCallback);
-//
-//        } else {
-//            Log.d(TAG, "onResum :: OpenCV library found inside package. Using it!");
-//            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-//        }
-//    }
-//
-//    public void onDestroy() {
-//        super.onDestroy();
-//
-//        if (surfaceView != null)
-//            surfaceView.disableView();
-//    }
-//
-//    @Override
-//    public void onCameraViewStarted(int width, int height) {
-//        Log.d(TAG, "onCameraViewStarted:: OpenCV ");
-//    }
-//
-//    @Override
-//    public void onCameraViewStopped() {
-//        Log.d(TAG, "onCameraViewStopped:: OpenCV ");
-//    }
-//
-//    @Override
-//    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-//        Log.d(TAG, "onCameraFrame :: OpenCV onCameraFrame");
-//        matInput = inputFrame.rgba();
-//
-//        if ( matResult == null )
-//            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
-//
-//        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
-//
-//        return matResult;
-//    }
-//
-//
-//    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
-//        @Override
-//        public void onManagerConnected(int status) {
-//            Log.i(TAG, "OpenCV mLoaderCallback");
-//            switch (status) {
-//                case LoaderCallbackInterface.SUCCESS:
-//                {
-//                    Log.i(TAG, "OpenCV loaded successfully");
-//                    surfaceView.enableView();
-//                } break;
-//                default:
-//                {
-//                    super.onManagerConnected(status);
-//                } break;
-//            }
-//
-//        }
-//    };
-//
-//    /********************************* openCV end *****************************************/
 }
