@@ -13,13 +13,18 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.hardware.Camera;
+import android.media.AudioManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -34,9 +39,14 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
+import static com.example.nsa.camera.MainActivity.cameraBtn;
+import static com.example.nsa.camera.MainActivity.mRecognizer;
 import static com.example.nsa.camera.MainActivity.overlay;
+import static com.example.nsa.camera.MainActivity.record_btn;
+import static com.example.nsa.camera.MainActivity.sttText;
 
 public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Callback, Camera.PictureCallback {
 
@@ -66,6 +76,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     public  Camera mCamera = null;
     public   List<Camera.Size> previewSizeList;
     private MainActivity ma;
+    private Intent sttIntent;
 
     @Override
     public void onPictureTaken(byte[] data, Camera camera) {
@@ -115,7 +126,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         mCameraInfo = cameraInfo;
         previewSizeList = parameters.getSupportedPreviewSizes();
         mCamera.setFaceDetectionListener(faceDetectionListener);
-        MainActivity.record_btn.setOnClickListener(recordListener);
+        record_btn.setOnClickListener(recordListener);
         ma = new MainActivity();
     }
 
@@ -254,6 +265,79 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         }
     }
 
+    public void startListening() {
+        Log.d(TAG,"surfaceview startListening");
+        sttIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        sttIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, MainActivity.mContext.getPackageName());
+        sttIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+        sttIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 6000);
+        mRecognizer = SpeechRecognizer.createSpeechRecognizer(MainActivity.mContext);
+        mRecognizer.setRecognitionListener(recognitionListener);
+        mRecognizer.startListening(sttIntent);
+    }
+
+    public RecognitionListener recognitionListener = new RecognitionListener() {
+        @Override public void onRmsChanged(float rmsdB) {
+        }
+
+        @Override public void onResults(Bundle results) {
+            String key = "";
+            key = SpeechRecognizer.RESULTS_RECOGNITION;
+            ArrayList<String> mResult = results.getStringArrayList(key);
+            String[] rs = new String[mResult.size()];
+            mResult.toArray(rs);
+            Log.d(TAG, "[STT] mResult : " + mResult);
+
+            sttText.setText(""+rs[0]);
+            String stt = rs[0];
+            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
+                cameraBtn.performClick();
+            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
+                record_btn.performClick();
+
+            if(mRecognizer != null)
+            {
+                mRecognizer.destroy();
+            }
+            startListening();
+        }
+
+        @Override public void onReadyForSpeech(Bundle params) {
+            Log.d(TAG, "[STT] onReadyForSpeech");
+        }
+
+        @Override public void onPartialResults(Bundle partialResults) {
+            Log.d(TAG, "[STT] onPartialResults");
+        }
+
+        @Override public void onEvent(int eventType, Bundle params) {
+            Log.d(TAG, "[STT] onEvent");
+        }
+
+        @Override public void onError(int error) {
+            Log.d(TAG, "[STT] onError");
+            if(mRecognizer != null) {
+                mRecognizer.destroy();
+            }
+            startListening();
+        }
+
+        @Override public void onEndOfSpeech() {
+
+            Log.d(TAG, "[STT] onEndOfSpeech " );
+//             mRecognizer.startListening(i);
+
+//             mRecognizer.startListening(i);
+        }
+
+        @Override public void onBufferReceived(byte[] buffer) {
+            Log.d(TAG, "[STT] onBufferReceived " );
+        }
+
+        @Override public void onBeginningOfSpeech() {
+            Log.d(TAG, "onBeginningOfSpeech " );
+        }
+    };
     public void record() {
         if (recording) {
             MainActivity.recordTimeText.setText("");
@@ -261,7 +345,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 mediaRecorder.stop();
                 mediaRecorder.release();
                 mCamera.lock();
-                MainActivity.cameraBtn.setEnabled(true);
+                cameraBtn.setEnabled(true);
                 recordTimerDestroy();
                 setRecorderValue();
                 capture(new Camera.PictureCallback() {
@@ -285,10 +369,19 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 recordTimerDestroy();
                 recording = false;
                 return;
+            } finally {
+                Log.d(TAG, "[STT] restart " );
+                startListening();
             }
         } else {
             try {
-                MainActivity.cameraBtn.setEnabled(false);
+
+                if(mRecognizer != null) {
+                    mRecognizer.destroy();
+                }
+                Log.d(TAG, "[STT] hold " );
+
+                cameraBtn.setEnabled(false);
 
                 mediaRecorder = new MediaRecorder();
                 mCamera.unlock();
@@ -326,7 +419,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 recordTimer.start();
             } catch (final Exception ex) {
                 ex.printStackTrace();
-                MainActivity.cameraBtn.setEnabled(true);
+                cameraBtn.setEnabled(true);
                 MainActivity.recordTimeText.setText("");
                 mediaRecorder.release();
                 recordTimerDestroy();

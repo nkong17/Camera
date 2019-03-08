@@ -71,8 +71,8 @@ public class MainActivity extends AppCompatActivity {
     private OrientationEventListener orientEventListener;
 //    private CountDownTimer countDownTimer;
 //    private int count = 0;
-    private TextView sttText ;
-    public static Intent i;
+    public static TextView sttText ;
+//    public static Intent i;
 
 
     public static SpeechRecognizer mRecognizer;
@@ -91,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
 
     public static  OverlayView overlay;
     public static AudioManager audioManager;
+    private static int currentVolumn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -171,6 +172,7 @@ public class MainActivity extends AppCompatActivity {
         });
         seekBar.setOnSeekBarChangeListener(surfaceView.seekBarListener);
         audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        currentVolumn = audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM);
 
     }
 
@@ -181,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
         if(mRecognizer != null)
         {
             mRecognizer.destroy();
-            audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false);
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0);
         }
         startListening();
     }
@@ -193,19 +195,19 @@ public class MainActivity extends AppCompatActivity {
         if(mRecognizer != null)
         {
             mRecognizer.destroy();
-            audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false);
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolumn, 0);
         }
     }
 
     @Override
     protected void onDestroy() {
         Log.d(TAG, "onDestroy");
+        super.onDestroy();
         if(mRecognizer != null)
         {
             mRecognizer.destroy();
-            audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false);
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolumn, 0);
         }
-        super.onDestroy();
     }
 
     @Override
@@ -304,25 +306,18 @@ public class MainActivity extends AppCompatActivity {
 
     /********************************************************************************* 함수 start *********************************************************************/
 
-    Thread th = new Thread(new Runnable() {
-        @Override
-        public void run() {
-            //구현 내용
-        }
-    });
-
-
     public void startListening() {
 
-        audioManager.setStreamMute(AudioManager.STREAM_MUSIC, true);
-        Log.d(TAG,"startListening");
-        i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
-        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
-        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 6000);
-        mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
-        mRecognizer.setRecognitionListener(recognitionListener);
-        mRecognizer.startListening(i);
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0);
+        Log.d(TAG,"main startListening");
+        surfaceView.startListening();
+//        i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+//        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+//        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+//        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 6000);
+//        mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+//        mRecognizer.setRecognitionListener(recognitionListener);
+//        mRecognizer.startListening(i);
     }
 
 
@@ -509,76 +504,76 @@ public class MainActivity extends AppCompatActivity {
     /**************************************************** Activity Result 함수 End ***************************************************************/
 
     /**************************************************** Listener Start ************************************************************************************/
-    public RecognitionListener recognitionListener = new RecognitionListener() {
-        @Override public void onRmsChanged(float rmsdB) {
-        }
-
-        @Override public void onResults(Bundle results) {
-            String key = "";
-            key = SpeechRecognizer.RESULTS_RECOGNITION;
-            ArrayList<String> mResult = results.getStringArrayList(key);
-            String[] rs = new String[mResult.size()];
-            mResult.toArray(rs);
-            Log.d(TAG, "[STT] mResult : " + mResult);
-            sttText.setText(""+rs[0]);
-            String stt = rs[0];
-            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
-                cameraBtn.performClick();
-            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
-                record_btn.performClick();
-
-            if(mRecognizer != null)
-            {
-                mRecognizer.destroy();
-            }
-            startListening();
-//            mRecognizer.startListening(i);
-        }
-
-        @Override public void onReadyForSpeech(Bundle params) {
-            Log.d(TAG, "[STT] onReadyForSpeech");
-    }
-
-         @Override public void onPartialResults(Bundle partialResults) {
-             Log.d(TAG, "[STT] onPartialResults");
-         }
-
-         @Override public void onEvent(int eventType, Bundle params) {
-             Log.d(TAG, "[STT] onEvent");
-         }
-
-         @Override public void onError(int error) {
-             Log.d(TAG, "[STT] onError");
-             if(mRecognizer != null)
-             {
-                 mRecognizer.destroy();
-             }
-             startListening();
-//             mRecognizer.cancel();
-//             mRecognizer.startListening(i);
+//    public RecognitionListener recognitionListener = new RecognitionListener() {
+//        @Override public void onRmsChanged(float rmsdB) {
+//        }
+//
+//        @Override public void onResults(Bundle results) {
+//            String key = "";
+//            key = SpeechRecognizer.RESULTS_RECOGNITION;
+//            ArrayList<String> mResult = results.getStringArrayList(key);
+//            String[] rs = new String[mResult.size()];
+//            mResult.toArray(rs);
+//            Log.d(TAG, "[STT] mResult : " + mResult);
+//            sttText.setText(""+rs[0]);
+//            String stt = rs[0];
+//            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
+//                cameraBtn.performClick();
+//            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
+//                record_btn.performClick();
+//
+//            if(mRecognizer != null)
+//            {
+//                mRecognizer.destroy();
+//            }
+//            startListening();
+////            mRecognizer.startListening(i);
+//        }
+//
+//        @Override public void onReadyForSpeech(Bundle params) {
+//            Log.d(TAG, "[STT] onReadyForSpeech");
+//    }
+//
+//         @Override public void onPartialResults(Bundle partialResults) {
+//             Log.d(TAG, "[STT] onPartialResults");
+//         }
+//
+//         @Override public void onEvent(int eventType, Bundle params) {
+//             Log.d(TAG, "[STT] onEvent");
+//         }
+//
+//         @Override public void onError(int error) {
+//             Log.d(TAG, "[STT] onError");
 //             if(mRecognizer != null)
 //             {
 //                 mRecognizer.destroy();
 //             }
-//            mRecognizer.startListening(i);
-         }
-
-         @Override public void onEndOfSpeech() {
-
-            Log.d(TAG, "[STT] onEndOfSpeech " );
-//             mRecognizer.startListening(i);
-
-//             mRecognizer.startListening(i);
-         }
-
-         @Override public void onBufferReceived(byte[] buffer) {
-             Log.d(TAG, "[STT] onBufferReceived " );
-         }
-
-         @Override public void onBeginningOfSpeech() {
-             Log.d(TAG, "onBeginningOfSpeech " );
-         }
-    };
+//             startListening();
+////             mRecognizer.cancel();
+////             mRecognizer.startListening(i);
+////             if(mRecognizer != null)
+////             {
+////                 mRecognizer.destroy();
+////             }
+////            mRecognizer.startListening(i);
+//         }
+//
+//         @Override public void onEndOfSpeech() {
+//
+//            Log.d(TAG, "[STT] onEndOfSpeech " );
+////             mRecognizer.startListening(i);
+//
+////             mRecognizer.startListening(i);
+//         }
+//
+//         @Override public void onBufferReceived(byte[] buffer) {
+//             Log.d(TAG, "[STT] onBufferReceived " );
+//         }
+//
+//         @Override public void onBeginningOfSpeech() {
+//             Log.d(TAG, "onBeginningOfSpeech " );
+//         }
+//    };
 /**************************************************** Listener End ************************************************************************************/
 
 }
