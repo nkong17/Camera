@@ -20,7 +20,10 @@ public class Tool {
     public void countDownTimer(final int state){
 
         count = MainActivity.timerSec / 1000;
-
+        MainActivity.cameraBtn.setClickable(false);
+        MainActivity.cameraBtn.setEnabled(false);
+        MainActivity.record_btn.setClickable(false);
+        MainActivity.record_btn.setEnabled(false);
         countDownTimer = new CountDownTimer(MainActivity.timerSec, MainActivity.COUNT_DOWN_INTERVAL) {
             public void onTick(long millisUntilFinished) {
                 MainActivity.countTxt.setText(String.valueOf(count));
@@ -28,6 +31,10 @@ public class Tool {
             }
             public void onFinish() {
                 MainActivity.countTxt.setText("");
+                MainActivity.cameraBtn.setClickable(true);
+                MainActivity.cameraBtn.setEnabled(true);
+                MainActivity.record_btn.setClickable(true);
+                MainActivity.record_btn.setEnabled(true);
                 if (state == TIMER_CAMERA)
                     MainActivity.capture();
                 else if (state == TIMER_RECORD)

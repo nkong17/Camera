@@ -276,68 +276,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
         mRecognizer.startListening(sttIntent);
     }
 
-    public RecognitionListener recognitionListener = new RecognitionListener() {
-        @Override public void onRmsChanged(float rmsdB) {
-        }
-
-        @Override public void onResults(Bundle results) {
-            String key = "";
-            key = SpeechRecognizer.RESULTS_RECOGNITION;
-            ArrayList<String> mResult = results.getStringArrayList(key);
-            String[] rs = new String[mResult.size()];
-            mResult.toArray(rs);
-            Log.d(TAG, "[STT] mResult : " + mResult);
-
-            sttText.setText(""+rs[0]);
-            String stt = rs[0];
-            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
-                cameraBtn.performClick();
-            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
-                record_btn.performClick();
-
-            if(mRecognizer != null)
-            {
-                mRecognizer.destroy();
-            }
-            startListening();
-        }
-
-        @Override public void onReadyForSpeech(Bundle params) {
-            Log.d(TAG, "[STT] onReadyForSpeech");
-        }
-
-        @Override public void onPartialResults(Bundle partialResults) {
-            Log.d(TAG, "[STT] onPartialResults");
-        }
-
-        @Override public void onEvent(int eventType, Bundle params) {
-            Log.d(TAG, "[STT] onEvent");
-        }
-
-        @Override public void onError(int error) {
-            Log.d(TAG, "[STT] onError");
-            if(mRecognizer != null) {
-                mRecognizer.destroy();
-            }
-            startListening();
-        }
-
-        @Override public void onEndOfSpeech() {
-
-            Log.d(TAG, "[STT] onEndOfSpeech " );
-//             mRecognizer.startListening(i);
-
-//             mRecognizer.startListening(i);
-        }
-
-        @Override public void onBufferReceived(byte[] buffer) {
-            Log.d(TAG, "[STT] onBufferReceived " );
-        }
-
-        @Override public void onBeginningOfSpeech() {
-            Log.d(TAG, "onBeginningOfSpeech " );
-        }
-    };
     public void record() {
         if (recording) {
             MainActivity.recordTimeText.setText("");
@@ -346,6 +284,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 mediaRecorder.release();
                 mCamera.lock();
                 cameraBtn.setEnabled(true);
+                cameraBtn.setClickable(true);
                 recordTimerDestroy();
                 setRecorderValue();
                 capture(new Camera.PictureCallback() {
@@ -382,6 +321,7 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 Log.d(TAG, "[STT] hold " );
 
                 cameraBtn.setEnabled(false);
+                cameraBtn.setClickable(false);
 
                 mediaRecorder = new MediaRecorder();
                 mCamera.unlock();
@@ -396,12 +336,6 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
                 mediaRecorder.setProfile(profile);
                 mediaRecorder.setOrientationHint(90);
-
-    //                    mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-    //                    mediaRecorder.setVideoSize(previewSizeList.get(0).width ,previewSizeList.get(0).height );
-    //                    mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
-    //                    mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-    //                    mediaRecorder.setAudioEncoder(3);
 
                 String cameraDirPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/TEST_CAMERA";
                 File cameraDir = new File(cameraDirPath);
@@ -499,6 +433,69 @@ public class CameraSurfaceView extends SurfaceView implements SurfaceHolder.Call
     /******************************************************** callback 함수 end ************************************************************************************/
 
     /******************************************************************* Listener Start ******************************************************************************/
+
+    public RecognitionListener recognitionListener = new RecognitionListener() {
+        @Override public void onRmsChanged(float rmsdB) {
+        }
+
+        @Override public void onResults(Bundle results) {
+            String key = "";
+            key = SpeechRecognizer.RESULTS_RECOGNITION;
+            ArrayList<String> mResult = results.getStringArrayList(key);
+            String[] rs = new String[mResult.size()];
+            mResult.toArray(rs);
+            Log.d(TAG, "[STT] mResult : " + mResult);
+
+            sttText.setText(""+rs[0]);
+            String stt = rs[0];
+            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
+                cameraBtn.performClick();
+            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
+                record_btn.performClick();
+
+            if(mRecognizer != null)
+            {
+                mRecognizer.destroy();
+            }
+            startListening();
+        }
+
+        @Override public void onReadyForSpeech(Bundle params) {
+            Log.d(TAG, "[STT] onReadyForSpeech");
+        }
+
+        @Override public void onPartialResults(Bundle partialResults) {
+            Log.d(TAG, "[STT] onPartialResults");
+        }
+
+        @Override public void onEvent(int eventType, Bundle params) {
+            Log.d(TAG, "[STT] onEvent");
+        }
+
+        @Override public void onError(int error) {
+            Log.d(TAG, "[STT] onError");
+            if(mRecognizer != null) {
+                mRecognizer.destroy();
+            }
+            startListening();
+        }
+
+        @Override public void onEndOfSpeech() {
+
+            Log.d(TAG, "[STT] onEndOfSpeech " );
+//             mRecognizer.startListening(i);
+
+//             mRecognizer.startListening(i);
+        }
+
+        @Override public void onBufferReceived(byte[] buffer) {
+            Log.d(TAG, "[STT] onBufferReceived " );
+        }
+
+        @Override public void onBeginningOfSpeech() {
+            Log.d(TAG, "onBeginningOfSpeech " );
+        }
+    };
 
     OnClickListener recordListener = new OnClickListener() {
         @Override

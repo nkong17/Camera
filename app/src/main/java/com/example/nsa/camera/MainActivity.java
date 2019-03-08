@@ -40,19 +40,9 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
-
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GoogleApiAvailability;
-import com.google.android.gms.vision.CameraSource;
-import com.google.android.gms.vision.MultiProcessor;
-import com.google.android.gms.vision.Tracker;
-import com.google.android.gms.vision.face.FaceDetector;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -60,7 +50,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_TAKE_ALBUM = 101;
     private final int SELECT_IMAGE = 1;
     private final int SELECT_MOVIE = 2;
-    private static final int RC_HANDLE_GMS = 9001;
 
     private static final String TAG = MainActivity.class.getSimpleName();
 
@@ -504,76 +493,7 @@ public class MainActivity extends AppCompatActivity {
     /**************************************************** Activity Result 함수 End ***************************************************************/
 
     /**************************************************** Listener Start ************************************************************************************/
-//    public RecognitionListener recognitionListener = new RecognitionListener() {
-//        @Override public void onRmsChanged(float rmsdB) {
-//        }
-//
-//        @Override public void onResults(Bundle results) {
-//            String key = "";
-//            key = SpeechRecognizer.RESULTS_RECOGNITION;
-//            ArrayList<String> mResult = results.getStringArrayList(key);
-//            String[] rs = new String[mResult.size()];
-//            mResult.toArray(rs);
-//            Log.d(TAG, "[STT] mResult : " + mResult);
-//            sttText.setText(""+rs[0]);
-//            String stt = rs[0];
-//            if (stt.contains("카메라") || stt.contains("사진") || stt.contains("촬영") || stt.contains("찰캌"))
-//                cameraBtn.performClick();
-//            else  if (stt.contains("동영상") || stt.contains("녹화") || stt.contains("영상") )
-//                record_btn.performClick();
-//
-//            if(mRecognizer != null)
-//            {
-//                mRecognizer.destroy();
-//            }
-//            startListening();
-////            mRecognizer.startListening(i);
-//        }
-//
-//        @Override public void onReadyForSpeech(Bundle params) {
-//            Log.d(TAG, "[STT] onReadyForSpeech");
-//    }
-//
-//         @Override public void onPartialResults(Bundle partialResults) {
-//             Log.d(TAG, "[STT] onPartialResults");
-//         }
-//
-//         @Override public void onEvent(int eventType, Bundle params) {
-//             Log.d(TAG, "[STT] onEvent");
-//         }
-//
-//         @Override public void onError(int error) {
-//             Log.d(TAG, "[STT] onError");
-//             if(mRecognizer != null)
-//             {
-//                 mRecognizer.destroy();
-//             }
-//             startListening();
-////             mRecognizer.cancel();
-////             mRecognizer.startListening(i);
-////             if(mRecognizer != null)
-////             {
-////                 mRecognizer.destroy();
-////             }
-////            mRecognizer.startListening(i);
-//         }
-//
-//         @Override public void onEndOfSpeech() {
-//
-//            Log.d(TAG, "[STT] onEndOfSpeech " );
-////             mRecognizer.startListening(i);
-//
-////             mRecognizer.startListening(i);
-//         }
-//
-//         @Override public void onBufferReceived(byte[] buffer) {
-//             Log.d(TAG, "[STT] onBufferReceived " );
-//         }
-//
-//         @Override public void onBeginningOfSpeech() {
-//             Log.d(TAG, "onBeginningOfSpeech " );
-//         }
-//    };
+
 /**************************************************** Listener End ************************************************************************************/
 
 }
